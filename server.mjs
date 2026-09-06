@@ -812,11 +812,25 @@ async function handleApi(request, response, pathname) {
     shuttingDown = true;
     response.setHeader("Connection", "close");
     sendJson(response, 200, { ok: true });
-    setTimeout(() => {
-      server.closeIdleConnections?.();
-      server.closeAllConnections?.();
-      process.exit(0);
-    }, 250);
+    const shutdownTimer = setTimeout(() => {
+      let forcedExitTimer;
+      const exit = () => {
+        if (forcedExitTimer) clearTimeout(forcedExitTimer);
+        process.exit(0);
+      };
+      // Close the listening socket first. This lets the launcher observe a
+      // real server shutdown instead of relying only on process.exit().
+      try {
+        server.close(exit);
+        server.closeIdleConnections?.();
+        server.closeAllConnections?.();
+        forcedExitTimer = setTimeout(exit, 5000);
+        forcedExitTimer.unref();
+      } catch {
+        exit();
+      }
+    }, 100);
+    shutdownTimer.unref();
     return;
   }
   sendJson(response, 404, { error: "Funzione non trovata." });
