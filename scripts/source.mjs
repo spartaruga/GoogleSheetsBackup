@@ -1,0 +1,21 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { ZipArchive } from 'archiver';
+import { root, pkg, sourceRoots, writeChecksum, walk } from './common.mjs';
+import { checkRepo, forbiddenFile } from './check-repo.mjs';
+checkRepo();
+const release = path.join(root, 'release');
+fs.mkdirSync(release, { recursive: true });
+const output = path.join(release, `GoogleWorkspaceBackup_v${pkg.version}_source.zip`);
+const names = sourceRoots.flatMap(name => fs.statSync(path.join(root, name)).isDirectory() ? walk(path.join(root, name)).map(child => `${name}/${child}`) : [name]).sort();
+for (const name of names) if (forbiddenFile(name)) throw new Error(`File non consentito: ${name}`);
+await new Promise((resolve, reject) => {
+  const stream = fs.createWriteStream(output);
+  const zip = new ZipArchive({ zlib: { level: 9 } });
+  stream.on('close', resolve); stream.on('error', reject); zip.on('error', reject);
+  zip.pipe(stream);
+  for (const name of names) zip.append(fs.readFileSync(path.join(root, name)), { name: `GoogleWorkspaceBackup/${name}`, date: new Date('2026-01-01T00:00:00Z'), mode: 0o644 });
+  zip.finalize().catch(reject);
+});
+writeChecksum(output);
+console.log(output);

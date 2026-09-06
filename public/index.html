@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Google Workspace Backup</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">PROGRAMMA LOCALE · WINDOWS</div>
+      <div class="title-row"><h1>Google Workspace Backup</h1><span id="appVersionBadge" class="version-badge">v…</span></div>
+      <p>Fogli Google e Apps Script in un unico backup.</p>
+    </div>
+    <div class="top-actions">
+      <span id="globalStatus" class="status neutral">Caricamento…</span>
+      <button id="shutdownButton" class="button ghost" type="button">Chiudi programma</button>
+    </div>
+  </header>
+
+  <nav class="steps" aria-label="Configurazione">
+    <button class="step active" data-page="setup" type="button"><span>1</span><b>Configurazione</b></button>
+    <button class="step" data-page="projects" type="button"><span>2</span><b>Progetti</b></button>
+    <button class="step" data-page="backup" type="button"><span>3</span><b>Backup</b></button>
+    <button class="step" data-page="ai" type="button"><span>4</span><b>Modifiche AI</b></button>
+    <button class="step" data-page="results" type="button"><span>5</span><b>Risultati</b></button>
+  </nav>
+
+  <main>
+    <section id="page-setup" class="page active">
+      <div class="page-heading">
+        <div>
+          <h2>Configurazione guidata</h2>
+          <p>Fai questi passaggi una volta per ogni PC.</p>
+        </div>
+        <button id="refreshStatusButton" class="button secondary" type="button">Aggiorna controlli</button>
+      </div>
+
+      <div class="setup-grid">
+        <article class="card setup-card">
+          <div class="card-number">1</div>
+          <div>
+            <h3>Controlla il PC</h3>
+            <p>L’installer include tutti i componenti. Non devi installare Node.js.</p>
+            <div class="inline-status"><span id="nodeStatus" class="dot"></span><span id="nodeText">Controllo Node.js…</span></div>
+          </div>
+        </article>
+
+        <article class="card setup-card">
+          <div class="card-number">2</div>
+          <div>
+            <h3>Crea il progetto Google Cloud</h3>
+            <ol>
+              <li>Apri Google Cloud e crea o seleziona un progetto.</li>
+              <li>Abilita <b>Google Sheets API</b>, <b>Google Drive API</b> e <b>Apps Script API</b>.</li>
+              <li>In <b>Google Auth Platform → Branding/Audience</b> configura l'app OAuth.</li>
+            </ol>
+            <div class="link-row">
+              <a class="button small secondary" href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noreferrer">Crea progetto</a>
+              <a class="button small secondary" href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noreferrer">Sheets API</a>
+              <a class="button small secondary" href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noreferrer">Drive API</a>
+              <a class="button small secondary" href="https://console.cloud.google.com/apis/library/script.googleapis.com" target="_blank" rel="noreferrer">Apps Script API</a>
+              <a class="button small secondary" href="https://console.cloud.google.com/auth/audience" target="_blank" rel="noreferrer">Configura OAuth</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="card setup-card">
+          <div class="card-number">3</div>
+          <div>
+            <h3>Crea le credenziali Desktop</h3>
+            <ol>
+              <li>Apri <b>Google Auth Platform → Clients</b>.</li>
+              <li>Premi <b>Create client</b> e scegli <b>Desktop app</b>.</li>
+              <li>Scarica il JSON e selezionalo qui sotto.</li>
+            </ol>
+            <div class="link-row">
+              <a class="button small secondary" href="https://console.cloud.google.com/auth/clients" target="_blank" rel="noreferrer">Apri Clients</a>
+              <button id="credentialsButton" class="button small primary" type="button">Seleziona JSON</button>
+              <input id="credentialsFile" type="file" accept="application/json,.json" hidden>
+            </div>
+            <div class="inline-status"><span id="credentialsStatus" class="dot"></span><span id="credentialsText">Credenziali non configurate</span></div>
+          </div>
+        </article>
+
+        <article class="card setup-card">
+          <div class="card-number">4</div>
+          <div>
+            <h3>Abilita l'accesso agli script</h3>
+            <p>Nelle impostazioni personali di Apps Script attiva <b>API Google Apps Script</b>. Ogni utilizzatore deve farlo sul proprio account.</p>
+            <a class="button small secondary" href="https://script.google.com/home/usersettings" target="_blank" rel="noreferrer">Apri impostazioni Apps Script</a>
+          </div>
+        </article>
+
+        <article class="card setup-card">
+          <div class="card-number">5</div>
+          <div>
+            <h3>Collega il tuo account Google</h3>
+            <p>Si apre Google nel browser. Usa un account che possa leggere i Fogli e gli Apps Script autorizzati.</p>
+            <div class="link-row">
+              <button id="loginButton" class="button primary" type="button">Collega account</button>
+              <button id="testLoginButton" class="button secondary" type="button">Verifica accesso</button>
+              <button id="logoutButton" class="button danger-quiet" type="button">Scollega</button>
+            </div>
+            <div class="inline-status"><span id="loginStatus" class="dot"></span><span id="loginText">Account non collegato</span></div>
+            <p id="tokenProtectionText" class="setup-hint"></p>
+            <div id="accessDetails" class="access-details" hidden></div>
+            <p class="setup-hint">Il primo collegamento richiede sola lettura. Per scrivere usa “Abilita pubblicazione” nella sezione Modifiche AI. I permessi già concessi alle vecchie versioni restano validi.</p>
+          </div>
+        </article>
+
+        <article class="card team-card">
+          <div>
+            <h3>Uso da parte di più persone</h3>
+            <p><b>Stessa azienda Google Workspace:</b> imposta l'audience OAuth su <b>Internal</b>. Distribuisci questo programma e il JSON Desktop separatamente. Ogni persona importa il JSON e accede col proprio account.</p>
+            <p><b>Account esterni:</b> usa audience <b>External</b>. Durante i test aggiungi gli indirizzi come test user; per uso stabile pubblica l'app secondo le richieste mostrate da Google.</p>
+            <p>Ogni account deve avere accesso ai Fogli e agli script. I token personali restano sul singolo PC e non finiscono nei backup.</p>
+          </div>
+        </article>
+      </div>
+
+      <div class="next-row"><button class="button primary next-button" data-next="projects" type="button">Continua ai progetti</button></div>
+    </section>
+
+    <section id="page-projects" class="page">
+      <div class="page-heading">
+        <div>
+          <h2>Progetti da salvare</h2>
+          <p>Inserisci un Foglio, uno Script ID oppure entrambi.</p>
+        </div>
+        <button id="addProjectButton" class="button primary" type="button">Aggiungi progetto</button>
+      </div>
+
+      <div class="card table-card">
+        <div class="table-wrap">
+          <table id="projectsTable">
+            <thead>
+              <tr>
+                <th class="enabled-column">Attivo</th>
+                <th>Nome progetto</th>
+                <th>Link o ID Foglio Google</th>
+                <th>Script ID o URL Apps Script</th>
+                <th class="action-column"></th>
+              </tr>
+            </thead>
+            <tbody id="projectsBody"></tbody>
+          </table>
+        </div>
+        <div id="emptyProjects" class="empty-state">
+          <h3>Nessun progetto</h3>
+          <p>Premi “Aggiungi progetto” per iniziare.</p>
+        </div>
+      </div>
+
+      <div class="info-box">
+        <h3>Dove trovi lo Script ID</h3>
+        <p>Apri il Foglio → <b>Estensioni → Apps Script → Impostazioni progetto</b> → copia <b>ID script</b>.</p>
+        <p>Se lasci vuoto lo Script ID, il programma salva solo il Foglio. Se lasci vuoto il Foglio, salva solo Apps Script.</p>
+      </div>
+
+      <div class="next-row">
+        <button id="saveProjectsButton" class="button secondary" type="button">Salva progetti</button>
+        <button id="projectsNextButton" class="button primary" type="button">Salva e continua</button>
+      </div>
+    </section>
+
+    <section id="page-backup" class="page">
+      <div class="page-heading">
+        <div>
+          <h2>Esegui backup</h2>
+          <p>Vengono elaborati tutti i progetti segnati come attivi.</p>
+        </div>
+      </div>
+
+      <div class="backup-layout">
+        <div class="card settings-card">
+          <h3>Destinazione</h3>
+          <label for="outputDir">Cartella principale</label>
+          <div class="input-actions">
+            <input id="outputDir" type="text" spellcheck="false">
+            <button id="chooseFolderButton" class="button secondary" type="button">Sfoglia</button>
+            <button id="openFolderButton" class="button secondary" type="button">Apri</button>
+          </div>
+          <div class="option-row">
+            <label class="check"><input id="xlsxOption" type="checkbox" checked><span>Crea anche copia Excel (.xlsx)</span></label>
+            <label class="check"><input id="zipOption" type="checkbox" checked><span>Crea ZIP finale</span></label>
+          </div>
+          <div id="backupSummary" class="summary-box"></div>
+          <div class="privacy-note">
+            <b>Controllo segreti obbligatorio</b>
+            <p>Prima del backup il programma analizza tutti gli script. Potrai censurare token, escludere file e renderli intoccabili.</p>
+          </div>
+          <div class="backup-actions">
+            <button id="runBackupButton" class="button primary large" type="button">Scansiona e avvia backup</button>
+            <button id="cancelBackupButton" class="button secondary large" type="button" hidden>Annulla backup</button>
+          </div>
+        </div>
+
+        <div class="card log-card">
+          <div class="card-heading">
+            <h3>Log</h3>
+            <button id="copyLogButton" class="button small secondary" type="button">Copia log</button>
+          </div>
+          <div id="progressWrap" class="progress-wrap" hidden role="progressbar" aria-label="Avanzamento backup" aria-valuemin="0" aria-valuemax="100"><div id="progressBar" class="progress-bar"></div></div>
+          <pre id="logBox" aria-live="polite">Pronto.</pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-ai" class="page">
+      <div class="page-heading">
+        <div>
+          <h2>Modifiche ricevute dall'AI</h2>
+          <p>Carica il file <b>modifiche-ai.json</b> prodotto seguendo le istruzioni contenute nello ZIP.</p>
+        </div>
+      </div>
+      <div class="ai-layout">
+        <article class="card settings-card compact-card">
+          <h3>1. Carica e controlla</h3>
+          <p>Solo se vuoi aggiornare Google: autorizza la scrittura usando lo stesso account. Non viene pubblicato nulla con questo pulsante.</p>
+          <button id="enablePublishButton" class="button secondary" type="button">Abilita pubblicazione</button>
+          <p>Il programma verifica progetto, versione di partenza, hash e file intoccabili.</p>
+          <button id="aiFileButton" class="button primary" type="button">Seleziona modifiche-ai.json</button>
+          <input id="aiFile" type="file" accept="application/json,.json" hidden>
+          <div class="info-box small-info">
+            Puoi creare solo la copia locale oppure pubblicarla direttamente su Google. Prima di pubblicare viene creato un backup di sicurezza e viene verificato che Apps Script non sia cambiato dopo il backup usato dall'AI.
+          </div>
+        </article>
+        <article class="card ai-preview-card">
+          <div class="card-heading">
+            <h3>2. Anteprima operazioni</h3>
+            <span id="aiPreviewStatus" class="status warn">Nessun file caricato</span>
+          </div>
+          <div id="aiPackageSummary" class="summary-box">Carica un file per vedere le modifiche.</div>
+          <div class="table-wrap ai-table-wrap">
+            <table class="ai-table">
+              <thead><tr><th>Azione</th><th>File</th><th>Stato</th><th>Motivo</th></tr></thead>
+              <tbody id="aiOperationsBody"></tbody>
+            </table>
+          </div>
+          <div class="ai-action-stack">
+            <button id="applyPublishAiButton" class="button primary large" type="button" disabled>Applica e pubblica su Google</button>
+            <button id="applyAiButton" class="button secondary large" type="button" disabled>Crea solo copia locale</button>
+          </div>
+          <div class="info-box small-info publish-note">La pubblicazione aggiorna Apps Script. Eventuali modifiche strutturali al Foglio vengono poi applicate dal codice Apps Script previsto dal pacchetto, normalmente al successivo avvio/ricaricamento del Foglio.</div>
+        </article>
+      </div>
+    </section>
+
+    <section id="page-results" class="page">
+      <div class="page-heading">
+        <div>
+          <h2>Ultimi backup</h2>
+          <p>Le versioni non vengono sovrascritte.</p>
+        </div>
+        <button id="resultsOpenFolderButton" class="button secondary" type="button">Apri cartella backup</button>
+      </div>
+      <div id="historyList" class="history-list"></div>
+      <div id="emptyHistory" class="card empty-state">
+        <h3>Nessun backup completato</h3>
+        <p>I risultati compariranno qui dopo la prima esecuzione.</p>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="privacyDialog" class="privacy-dialog">
+    <form method="dialog" class="dialog-shell">
+      <div class="dialog-heading">
+        <div>
+          <div class="eyebrow dark">CONTROLLO PRIMA DELLO ZIP</div>
+          <h2>Anteprima privacy dello ZIP AI</h2>
+          <p>Il backup originale resta locale. Controlla script, segnalazioni e dati del Foglio prima di creare lo ZIP destinato all'AI.</p>
+        </div>
+        <button id="cancelPrivacyButton" class="button secondary" value="cancel" type="submit">Annulla</button>
+      </div>
+      <div class="legend-row">
+        <span><b>Includi:</b> nessuna modifica</span>
+        <span><b>Censura:</b> predefinita per token ad alta confidenza</span>
+        <span><b>Escludi:</b> non inserisce il file e lo rende intoccabile</span>
+        <span><b>Da verificare:</b> resta incluso ma viene segnalato</span>
+      </div>
+      <div class="table-wrap privacy-table-wrap">
+        <table class="privacy-table">
+          <thead><tr><th>Progetto</th><th>Contenuto</th><th>Anteprima e rischi</th><th>Nello ZIP AI</th><th>Intoccabile</th></tr></thead>
+          <tbody id="privacyBody"></tbody>
+        </table>
+      </div>
+      <div id="privacyEmpty" class="empty-state" hidden>
+        <h3>Nessun contenuto rilevato</h3>
+        <p>Controlla la configurazione dei progetti.</p>
+      </div>
+      <div class="dialog-actions">
+        <span id="privacySummary"></span>
+        <button id="confirmPrivacyButton" class="button primary" value="default" type="button">Conferma e crea backup</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
