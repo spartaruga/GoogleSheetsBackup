@@ -5,7 +5,7 @@ $setup = Join-Path $PWD "release\GoogleWorkspaceBackup-Setup-$version.exe"
 $install = Join-Path $env:RUNNER_TEMP 'GWB install with spaces'
 $GwbProfileDirectory = Join-Path $env:APPDATA 'GoogleWorkspaceBackup'
 if (Test-Path -LiteralPath $GwbProfileDirectory) { throw 'Il runner contiene gia un profilo GWB. Test interrotto per conservarlo.' }
-$headers = @{ 'X-App-Request' = 'GoogleWorkspaceBackup'; 'Connection' = 'close' }
+$headers = @{ 'X-App-Request' = 'GoogleWorkspaceBackup' }
 function Install-App {
     $process = Start-Process -FilePath $setup -ArgumentList ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="' + $install + '"') -Wait -PassThru
     if ($process.ExitCode -ne 0) { throw "Installer fallito: $($process.ExitCode)" }
