@@ -811,8 +811,7 @@ async function handleApi(request, response, pathname) {
     if (requestBusy || activeJob?.status === "running") return sendJson(response, 409, { error: "Operazione in corso. Attendi il termine oppure annulla il backup prima di chiudere." });
     shuttingDown = true;
     response.setHeader("Connection", "close");
-    sendJson(response, 200, { ok: true });
-    const shutdownTimer = setTimeout(() => {
+    const shutdown = () => {
       let forcedExitTimer;
       const exit = () => {
         if (forcedExitTimer) clearTimeout(forcedExitTimer);
@@ -829,8 +828,14 @@ async function handleApi(request, response, pathname) {
       } catch {
         exit();
       }
-    }, 100);
-    shutdownTimer.unref();
+    };
+    // Do not close the socket while the HTTP response is still being sent.
+    // Windows PowerShell otherwise reports a closed keep-alive connection.
+    response.once("finish", () => {
+      const shutdownTimer = setTimeout(shutdown, 50);
+      shutdownTimer.unref();
+    });
+    sendJson(response, 200, { ok: true });
     return;
   }
   sendJson(response, 404, { error: "Funzione non trovata." });
