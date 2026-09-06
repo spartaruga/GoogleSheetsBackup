@@ -35,7 +35,7 @@ try {
             $running = Get-RunningApp
             if ($running) {
                 if ($running.Version -ne $LocalVersion) { throw 'Chiudi la versione precedente con Chiudi programma e riprova. Nessun processo e stato terminato.' }
-                Start-Process "http://127.0.0.1:$($running.Port)"
+                if ($env:GWB_NO_BROWSER -ne '1') { Start-Process "http://127.0.0.1:$($running.Port)" }
                 exit 0
             }
             Start-Sleep -Milliseconds 500
@@ -59,8 +59,22 @@ try {
         Move-Item -LiteralPath $ServerLog -Destination "$ServerLog.previous" -Force
     }
     $errorLog = Join-Path $DataDirectory 'server-error.log'
-    $arguments = '"' + (Join-Path $AppDirectory 'server.mjs') + '"'
-    $child = Start-Process -FilePath $NodePath -ArgumentList $arguments -WorkingDirectory $AppDirectory -WindowStyle Hidden -PassThru -RedirectStandardOutput $ServerLog -RedirectStandardError $errorLog
+    $serverScript = Join-Path $AppDirectory 'server.mjs'
+
+    # Avoid Start-Process -RedirectStandardOutput/-RedirectStandardError here.
+    # On Windows those redirections can leave the PowerShell launcher alive even
+    # after Node has already shut down. Let cmd.exe own the file redirections so
+    # the process chain closes deterministically: launcher -> cmd -> node.
+    $command = '""{0}" "{1}" 1>"{2}" 2>"{3}""' -f $NodePath, $serverScript, $ServerLog, $errorLog
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = (Join-Path $env:SystemRoot 'System32\cmd.exe')
+    $startInfo.Arguments = "/d /s /c $command"
+    $startInfo.WorkingDirectory = $AppDirectory
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $child = New-Object System.Diagnostics.Process
+    $child.StartInfo = $startInfo
+    if (-not $child.Start()) { throw 'Impossibile avviare il runtime incluso.' }
     $ready = $false
     for ($i = 0; $i -lt 60; $i++) {
         if ($child.HasExited) { break }
