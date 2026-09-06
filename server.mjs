@@ -815,8 +815,8 @@ async function handleApi(request, response, pathname) {
     setTimeout(() => {
       server.closeIdleConnections?.();
       server.closeAllConnections?.();
-      server.close(() => process.exit(0));
-    }, 100);
+      process.exit(0);
+    }, 250);
     return;
   }
   sendJson(response, 404, { error: "Funzione non trovata." });
