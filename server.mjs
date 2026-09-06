@@ -810,8 +810,13 @@ async function handleApi(request, response, pathname) {
   if (pathname === "/api/shutdown" && request.method === "POST") {
     if (requestBusy || activeJob?.status === "running") return sendJson(response, 409, { error: "Operazione in corso. Attendi il termine oppure annulla il backup prima di chiudere." });
     shuttingDown = true;
+    response.setHeader("Connection", "close");
     sendJson(response, 200, { ok: true });
-    setTimeout(() => server.close(() => process.exit(0)), 100);
+    setTimeout(() => {
+      server.closeIdleConnections?.();
+      server.closeAllConnections?.();
+      server.close(() => process.exit(0));
+    }, 100);
     return;
   }
   sendJson(response, 404, { error: "Funzione non trovata." });
