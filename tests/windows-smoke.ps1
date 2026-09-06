@@ -35,7 +35,29 @@ function Start-App {
 }
 function Stop-App($app) {
     Invoke-RestMethod "$($app.Url)/api/shutdown" -Method Post -Headers $headers -ContentType 'application/json' -Body '{}' | Out-Null
-    if (-not $app.Process.WaitForExit(15000)) { throw 'Il launcher non si e chiuso.' }
+    for ($i = 0; $i -lt 30; $i++) {
+        $app.Process.Refresh()
+        if ($app.Process.HasExited) { return }
+        Start-Sleep -Milliseconds 500
+    }
+    $app.Process.Refresh()
+    $errorLog = Join-Path $GwbProfileDirectory 'server-error.log'
+    $serverLog = Join-Path $GwbProfileDirectory 'server.log'
+    $children = @()
+    try {
+        $children = @(Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $app.Process.Id } | ForEach-Object { "$($_.ProcessId): $($_.Name) $($_.CommandLine)" })
+    } catch {}
+    $details = @(
+        "PID launcher: $($app.Process.Id)"
+        "Launcher terminato: $($app.Process.HasExited)"
+        "Processi figli: $($children -join ' | ')"
+    )
+    foreach ($log in @($errorLog, $serverLog)) {
+        if (Test-Path -LiteralPath $log) {
+            $details += "$(Split-Path $log -Leaf): $((Get-Content -LiteralPath $log -Tail 12) -join ' | ')"
+        }
+    }
+    throw ("Il launcher non si e chiuso entro 15 secondi. " + ($details -join ' || '))
 }
 Install-App
 $app = Start-App
