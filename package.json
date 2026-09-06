@@ -1,0 +1,25 @@
+{
+  "name": "google-workspace-backup",
+  "version": "3.3.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "self-test": "node engine.mjs self-test",
+    "test": "node --test tests/*.test.mjs",
+    "check:repo": "node scripts/check-repo.mjs",
+    "build": "node scripts/build.mjs",
+    "installer": "node scripts/installer.mjs",
+    "source": "node scripts/source.mjs"
+  },
+  "dependencies": {
+    "archiver": "8.0.0",
+    "googleapis": "178.0.0"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
+  }
+}

@@ -1,0 +1,26 @@
+GOOGLE WORKSPACE BACKUP
+
+Questo archivio contiene il progetto sorgente aggiornato.
+Il numero versione corrente e in package.json.
+
+PER USARE IL PROGRAMMA
+Scarica il Setup compilato da GitHub Releases, installalo e aprilo dal menu Start.
+Il Setup include Node.js: non serve installarlo sul PC dell'utilizzatore.
+
+PER CREARE IL SETUP DA QUESTO SORGENTE
+Metodo semplice: carica il sorgente su GitHub, apri Actions > Windows build > Run workflow.
+Scarica l'artefatto al termine dei test.
+
+Su un PC Windows di sviluppo con Node.js 24 LTS e Inno Setup:
+1. npm ci --ignore-scripts
+2. npm test
+3. npm run check:repo
+4. npm run build
+5. npm run installer
+
+Per configurare Google, fare backup e usare modifiche AI: leggi README.md.
+Per condividere file o pubblicare il sorgente: leggi SECURITY.md.
+Per le verifiche effettivamente eseguite: docs/TEST_REPORT.md.
+
+Aggiornamenti/disinstallazione mantengono il profilo in APPDATA e i backup.
+Chiudi il programma dal pulsante prima di aggiornare.

@@ -1,0 +1,125 @@
+NOTE STORICHE — Le istruzioni correnti sono in README.md.
+Per la nuova distribuzione vedi CHANGELOG.md.
+Le indicazioni dei vecchi launcher/permessi non si applicano alla versione corrente.
+
+VERSIONE 3.3.0
+
+PRIVACY PIU CHIARA
+- I token ad alta confidenza partono su "Censura".
+- Le segnalazioni incerte partono su "Includi" con avviso esplicito.
+- Ogni segnalazione mostra una breve anteprima contestuale con il valore nascosto.
+- I dati del Foglio possono essere esclusi dallo ZIP AI senza toccare il backup locale.
+
+BACKUP PIU COMPLETO E ROBUSTO
+- Le note delle celle vengono indicizzate in notes.json.
+- Commenti e risposte vengono salvati in comments.json quando disponibili.
+- I Fogli grandi usano automaticamente richieste per scheda e blocchi di righe.
+- Le richieste Google hanno timeout e ritentano gli errori temporanei.
+- La barra mostra l'avanzamento reale e il backup può essere annullato.
+- Le copie parziali del progetto interrotto o fallito vengono eliminate.
+
+ACCOUNT E SICUREZZA LOCALE
+- La verifica mostra nome/email dell'account Google e accesso a ogni Foglio/Script.
+- Su Windows token.json viene cifrato con DPAPI per l'utente corrente.
+- I vecchi token in chiaro vengono migrati automaticamente.
+
+DIPENDENZE
+- googleapis 178.0.0, archiver 8.0.0, @google-cloud/local-auth 3.0.1.
+- Adeguata la creazione ZIP alla nuova API ESM di Archiver 8.
+
+VERSIONE 3.2.8
+
+CORREZIONI DI ROBUSTEZZA
+- Le revisioni AI successive sulla stessa baseline conservano le modifiche già pubblicate.
+- Una pubblicazione già riuscita su Google ma interrotta durante la conferma locale può essere verificata e completata al nuovo tentativo.
+- I pacchetti AI non possono usare sottocartelle, file interni, manifest eliminati o operazioni duplicate.
+- Il backup di partenza viene associato tramite ID progetto, anche dopo una rinomina o con nomi progetto uguali.
+- Le vecchie protezioni riferite a file Apps Script eliminati vengono ripulite durante la scansione.
+- I nomi locali incompatibili o collidenti vengono bloccati prima di perdere file.
+- Il launcher distingue il programma da altri servizi presenti sulla stessa porta e segnala il conflitto.
+- I pulsanti disabilitati restano nello stato corretto dopo i controlli account.
+
+VERSIONE 3.2.6
+
+CORREZIONE NOMI FILE GOOGLE APPS SCRIPT
+- Google Apps Script non consente due file con lo stesso nome logico anche se uno è .gs e l'altro .html.
+- Il programma ora rileva questo conflitto localmente e mostra un errore chiaro prima di inviare il progetto a Google.
+- Esempio rilevato: ClientReminders.gs + ClientReminders.html.
+- Nessun cambiamento ai controlli hash, ai file protetti o alla pubblicazione completa.
+
+VERSIONE 3.2.4
+
+VERSIONE VISIBILE NELL'INTERFACCIA
+- La versione del programma è mostrata accanto al titolo nell'header.
+- Il numero viene letto dal server in esecuzione, così è possibile capire subito se è rimasta aperta una vecchia istanza.
+- Anche il titolo della scheda del browser mostra la versione.
+
+CORREZIONE IMPORT MODIFICHE AI
+- La scansione euristica dei segreti NON blocca più i file nuovi restituiti dall'AI durante Applica/Pubblica.
+- La censura/esclusione dei segreti resta nella fase di esportazione _PER_AI, dove deve stare.
+- I file marcati intoccabili restano comunque non modificabili.
+- Corretto il numero versione interno del server.
+- Il launcher non riusa più silenziosamente un server di una versione precedente: se trova una vecchia istanza sulla porta locale, la chiude e avvia la versione estratta.
+
+VERSIONE 3.2.2
+
+CORREZIONE RILEVAZIONE SEGRETI
+- Corretto un falso positivo che bloccava nuovi Apps Script contenenti nomi tecnici lunghi in maiuscolo/underscore, ad esempio GESTIONALE_LAST_PRIMA_NOTA_IMPORT.
+- I pattern ad alta affidabilità per token e chiavi reali restano attivi.
+- Aggiunto test di regressione specifico.
+
+VERSIONE 3.2.1
+
+CORREZIONI SICUREZZA
+- I file protetti/esclusi (es. Config.gs) vengono recuperati dal backup locale e reinseriti invariati quando si pubblica il progetto completo su Google.
+- Lo ZIP _PER_AI non include più apps-script/_content-api.json, perché può contenere anche sorgenti protetti.
+- La pubblicazione resta bloccata se un file protetto locale non coincide con il backup originale o se Google è cambiato dopo il backup.
+
+VERSIONE 3.2.0
+==============
+
+- Aggiunta pubblicazione diretta delle modifiche AI su Google Apps Script.
+- Nuovo permesso OAuth script.projects per aggiornare il progetto Apps Script.
+- Prima di pubblicare viene creato un backup locale di sicurezza dello stato Google corrente.
+- La pubblicazione viene bloccata se Apps Script è cambiato dopo il backup usato dall'AI.
+- I file protetti vengono verificati e mantenuti invariati anche durante la pubblicazione completa.
+- Dopo updateContent il programma rilegge Google e verifica che il contenuto pubblicato coincida.
+- Aggiunti pulsanti "Applica e pubblica su Google" e "Pubblica su Google" dallo storico.
+- Se la pubblicazione fallisce, la copia locale AI viene conservata e può essere ripubblicata.
+- Gli account collegati con versioni precedenti possono richiedere Scollega/Collega per autorizzare il nuovo permesso.
+
+VERSIONE 3.1.0
+==============
+
+- Aggiunta scansione preventiva di token e segreti negli Apps Script.
+- Scelte per includere, censurare o escludere ogni script dallo ZIP AI.
+- Aggiunta memoria persistente dei file intoccabili.
+- Ogni ZIP AI contiene istruzioni, manifesto, hash e schema modifiche.
+- Aggiunto import modifiche-ai.json con anteprima e controllo conflitti.
+- I file intoccabili sono bloccati anche se l'AI prova a modificarli.
+- I segnaposto censurati vengono reidratati solo nella copia locale.
+- Le modifiche AI vengono applicate a una nuova copia, mai all'originale.
+
+VERSIONE 3.0.0
+==============
+
+- Unificato backup Fogli Google e Apps Script.
+- Eliminata la dipendenza da clasp.
+- Unico accesso OAuth in sola lettura.
+- Configurazione Google Cloud guidata dall'interfaccia.
+- Gestione di più progetti e progetti solo Apps Script.
+- Interfaccia locale adattiva per finestre PC di dimensioni diverse.
+- Copia Excel, JSON completo, formule, struttura, sorgenti e ZIP.
+- Versioni separate senza sovrascrivere i backup precedenti.
+- Credenziali, token e configurazione salvati nel profilo Windows.
+- Log operativo copiabile e diagnostica di avvio.
+
+
+3.2.6
+- Supporta aggiornamenti AI iterativi sulla stessa baseline: se Google coincide con l’ultima versione AI pubblicata nota, una nuova revisione può essere pubblicata senza dover creare un backup intermedio.
+- Rimane attivo il blocco se Google contiene modifiche esterne/non riconosciute.
+
+3.2.7
+- Corretto il popup spurio "codice -1" quando una nuova versione sostituisce un server locale precedente.
+- Il launcher chiude anche il vecchio processo PowerShell che ospitava il server, evitando che mostri un falso errore.
+- Se il server termina durante un passaggio di consegne ma una nuova istanza sana e attiva, il launcher non segnala errore.
