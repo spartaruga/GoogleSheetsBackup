@@ -39,6 +39,7 @@ const ui = {
 let currentState = null;
 let toastTimer = null;
 let jobTimer = null;
+let automaticAccountCheckAttempted = false;
 
 async function api(url, options = {}) {
   const requestOptions = { cache: "no-store", ...options };
@@ -284,9 +285,32 @@ function renderState(state) {
   renderHistory(state.history || []);
 }
 
-async function refreshState() {
-  const state = await api("/api/state");
+async function refreshState({ identifySavedAccount = true } = {}) {
+  let state = await api("/api/state");
   renderState(state);
+
+  if (
+    identifySavedAccount
+    && !automaticAccountCheckAttempted
+    && state.credentialsConfigured
+    && state.tokenConfigured
+    && !state.account?.emailAddress
+    && state.tokenProtection !== "invalid"
+  ) {
+    automaticAccountCheckAttempted = true;
+    try {
+      await api("/api/auth/test", {
+        method: "POST",
+        body: JSON.stringify({ identityOnly: true }),
+      });
+      state = await api("/api/state");
+      renderState(state);
+    } catch (error) {
+      setDot(ui.loginStatus, "error");
+      ui.loginText.textContent = `Token presente, ma verifica account fallita: ${error.message}`;
+    }
+  }
+
   return state;
 }
 
