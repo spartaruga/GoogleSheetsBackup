@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.3.2 — 2026-09-07
+
+### Accesso Google
+
+- Mostra nell'interfaccia un link diretto al consenso Google se il browser non si apre automaticamente.
+- Il pulsante “Scollega” diventa “Annulla e scollega” durante il login e resta utilizzabile.
+- L'annullamento chiude subito il callback OAuth, invalida il tentativo corrente e rimuove token e file temporanei locali.
+- Un tentativo abbandonato non blocca più i successivi collegamenti fino al timeout.
+- Aggiunti test automatici per URL alternativo, annullamento e pulizia del login.
+
 ## 3.3.1 — 2026-09-06
 
 ### Distribuzione

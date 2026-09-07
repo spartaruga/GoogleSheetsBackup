@@ -36,7 +36,7 @@ Il rilevatore esamina i sorgenti Apps Script. Le celle, note e commenti non hann
 
 Server UI e callback OAuth ascoltano solo su `127.0.0.1`. Le API verificano Host esatto, Origin quando presente, richieste browser cross-site e intestazione dedicata per le modifiche. Non concedono CORS a siti esterni. L'interfaccia ha CSP e blocco iframe.
 
-OAuth usa state casuale, PKCE S256, consenso esplicito e scadenza di cinque minuti. Token e codici di login non sono stampati nei log. Il server non viene esposto in rete locale. Programmi eseguiti sullo stesso PC con gli stessi diritti possono comunque chiamare il servizio: non è una barriera contro malware locale.
+OAuth usa state casuale, PKCE S256, consenso esplicito e scadenza di due minuti. Il tentativo può essere annullato dall'interfaccia; il callback viene chiuso e gli eventuali file token temporanei vengono rimossi. Token e codici di login non sono stampati nei log. Il server non viene esposto in rete locale. Programmi eseguiti sullo stesso PC con gli stessi diritti possono comunque chiamare il servizio: non è una barriera contro malware locale.
 
 Chiusura e mutazioni simultanee vengono bloccate durante lavori in corso. Nessuna funzione dell'installer/launcher termina forzatamente processi Node sconosciuti. Arresti forzati di Windows/processi o guasti del disco restano fuori da queste garanzie.
 

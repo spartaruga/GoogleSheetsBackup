@@ -55,3 +55,28 @@ test('OAuth access denial is returned immediately with a useful error', async ()
   assert.equal((await fetch(callback)).status, 400);
   await denied;
 });
+
+test('OAuth exposes the manual URL and can be cancelled immediately', async () => {
+  const controller = new AbortController();
+  let authUrl;
+  let callback;
+  let started;
+  const ready = new Promise(resolve => { started = resolve; });
+  const result = authenticateDesktop({
+    keys: { client_id: 'demo', client_secret: 'demo' },
+    scopes: ['demo.readonly'],
+    open() {},
+    signal: controller.signal,
+    onUrl(url) {
+      authUrl = new URL(url);
+      callback = authUrl.searchParams.get('redirect_uri');
+      started();
+    },
+    timeoutMs: 3000,
+  });
+  await ready;
+  assert.equal(authUrl.hostname, 'accounts.google.com');
+  controller.abort();
+  await assert.rejects(result, /annullato/);
+  await assert.rejects(fetch(callback));
+});
