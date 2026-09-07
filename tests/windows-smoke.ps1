@@ -6,6 +6,8 @@ $install = Join-Path $env:RUNNER_TEMP 'GWB install with spaces'
 $GwbProfileDirectory = Join-Path $env:APPDATA 'GoogleWorkspaceBackup'
 if (Test-Path -LiteralPath $GwbProfileDirectory) { throw 'Il runner contiene gia un profilo GWB. Test interrotto per conservarlo.' }
 $headers = @{ 'X-App-Request' = 'GoogleWorkspaceBackup' }
+$launcherSource = Get-Content -LiteralPath (Join-Path $PWD 'launcher.ps1') -Raw
+if ($launcherSource -notmatch '\$handler\.UseProxy\s*=\s*\$false') { throw 'Il launcher deve bypassare esplicitamente il proxy per il controllo HTTP locale.' }
 function Install-App {
     $process = Start-Process -FilePath $setup -ArgumentList ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="' + $install + '"') -Wait -PassThru
     if ($process.ExitCode -ne 0) { throw "Installer fallito: $($process.ExitCode)" }
