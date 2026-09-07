@@ -64,6 +64,7 @@ async function loadState() {
     state = {
       ...structuredClone(DEFAULT_STATE),
       ...saved,
+      version: DEFAULT_STATE.version,
       options: { ...DEFAULT_STATE.options, ...(saved.options || {}) },
       projects: Array.isArray(saved.projects) ? saved.projects : [],
       history: Array.isArray(saved.history)
@@ -742,7 +743,12 @@ async function handleApi(request, response, pathname) {
     return sendJson(response, 200, result);
   }
   if (pathname === "/api/auth/test" && request.method === "POST") {
-    const result = await testConnection(CREDENTIALS_PATH, TOKEN_PATH, state.projects);
+    const payload = await readJson(request);
+    const result = await testConnection(
+      CREDENTIALS_PATH,
+      TOKEN_PATH,
+      payload.identityOnly === true ? [] : state.projects,
+    );
     state.account = result.user;
     state.accessChecks = result.checks;
     state.accessCheckedAt = result.checkedAt;
