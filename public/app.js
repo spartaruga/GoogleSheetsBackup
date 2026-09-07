@@ -40,6 +40,7 @@ let currentState = null;
 let toastTimer = null;
 let jobTimer = null;
 let automaticAccountCheckAttempted = false;
+let authWaitTimer = null;
 
 async function api(url, options = {}) {
   const requestOptions = { cache: "no-store", ...options };
@@ -350,15 +351,48 @@ function setButtonsBusy(isBusy) {
   });
 }
 
+function setAuthButtonsBusy(isBusy) {
+  ["loginButton", "testLoginButton", "logoutButton", "credentialsButton", "enablePublishButton"].forEach((id) => {
+    const button = document.querySelector(`#${id}`);
+    if (!button) return;
+    if (isBusy) {
+      button.dataset.disabledBeforeAuth = button.disabled ? "true" : "false";
+      button.disabled = true;
+    } else {
+      button.disabled = button.dataset.disabledBeforeAuth === "true";
+      delete button.dataset.disabledBeforeAuth;
+    }
+  });
+}
+
+function startAuthWaitMessage() {
+  clearInterval(authWaitTimer);
+  const startedAt = Date.now();
+  const update = () => {
+    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+    const remaining = Math.max(0, 120 - elapsed);
+    ui.loginText.textContent = `Completa l'accesso nella finestra Google… timeout tra ${remaining}s`;
+  };
+  update();
+  authWaitTimer = setInterval(update, 1000);
+}
+
+function stopAuthWaitMessage() {
+  clearInterval(authWaitTimer);
+  authWaitTimer = null;
+}
+
 async function accountAction(action) {
-  setButtonsBusy(true);
+  setAuthButtonsBusy(true);
   try {
     let result = null;
     if (action === "login" || action === "publish") {
-      ui.loginText.textContent = "Completa l'accesso nella finestra Google…";
+      startAuthWaitMessage();
+      showToast("Completa l'accesso nel browser. L'app resta utilizzabile e il collegamento scade dopo 2 minuti.");
       result = await api("/api/auth", { method: "POST", body: JSON.stringify({ mode: action === "publish" ? "publish" : "backup" }) });
       showToast(result.failedCount ? `Account collegato, ma ${result.failedCount} accessi richiedono attenzione.` : "Account Google collegato e verificato.", result.failedCount > 0);
     } else if (action === "test") {
+      ui.loginText.textContent = "Verifica account Google in corso…";
       result = await api("/api/auth/test", { method: "POST", body: "{}" });
       showToast(result.failedCount ? `Verifica completata: ${result.failedCount} accessi non disponibili.` : "Accesso Google verificato per tutti i progetti.", result.failedCount > 0);
     } else {
@@ -371,7 +405,8 @@ async function accountAction(action) {
     ui.loginText.textContent = error.message;
     showToast(error.message, true);
   } finally {
-    setButtonsBusy(false);
+    stopAuthWaitMessage();
+    setAuthButtonsBusy(false);
   }
 }
 
