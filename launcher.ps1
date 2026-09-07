@@ -6,19 +6,47 @@ $StartupLog = Join-Path $DataDirectory 'startup-error.log'
 $ServerLog = Join-Path $DataDirectory 'server.log'
 $mutex = $null
 $ownsMutex = $false
+$script:LastHealthError = ''
 
 function Get-RunningApp {
     $recordPath = Join-Path $DataDirectory 'instance.json'
-    if (Test-Path -LiteralPath $recordPath) {
-        try {
-            $record = Get-Content -LiteralPath $recordPath -Raw | ConvertFrom-Json
-            $port = [int]$record.port
-            if ($port -lt 1 -or $port -gt 65535) { return $null }
-            $info = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2
-            if ($info.app -eq 'GoogleWorkspaceBackup' -and $info.instanceId -eq $record.instanceId) {
-                return [PSCustomObject]@{ Port = $port; Version = [string]$info.version }
-            }
-        } catch {}
+    if (-not (Test-Path -LiteralPath $recordPath)) { return $null }
+
+    $handler = $null
+    $client = $null
+    try {
+        $record = Get-Content -LiteralPath $recordPath -Raw | ConvertFrom-Json
+        $port = [int]$record.port
+        if ($port -lt 1 -or $port -gt 65535) { return $null }
+
+        # This request must never use the user's/company proxy. The app listens
+        # only on loopback, and some Windows proxy configurations otherwise
+        # make Invoke-RestMethod fail even while the local server is healthy.
+        Add-Type -AssemblyName System.Net.Http
+        $handler = [System.Net.Http.HttpClientHandler]::new()
+        $handler.UseProxy = $false
+        $client = [System.Net.Http.HttpClient]::new($handler)
+        $client.Timeout = [TimeSpan]::FromSeconds(2)
+
+        $response = $client.GetAsync("http://127.0.0.1:$port/api/health").GetAwaiter().GetResult()
+        if (-not $response.IsSuccessStatusCode) {
+            $script:LastHealthError = "HTTP $([int]$response.StatusCode) dal server locale."
+            return $null
+        }
+
+        $json = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        $info = $json | ConvertFrom-Json
+        if ($info.app -eq 'GoogleWorkspaceBackup' -and $info.instanceId -eq $record.instanceId) {
+            $script:LastHealthError = ''
+            return [PSCustomObject]@{ Port = $port; Version = [string]$info.version }
+        }
+
+        $script:LastHealthError = 'Risposta /api/health non coerente con instance.json.'
+    } catch {
+        $script:LastHealthError = $_.Exception.Message
+    } finally {
+        if ($client) { $client.Dispose() }
+        elseif ($handler) { $handler.Dispose() }
     }
     return $null
 }
@@ -82,7 +110,8 @@ try {
         Start-Sleep -Milliseconds 500
     }
     if (-not $ready -and -not $child.HasExited) {
-        throw 'Avvio non completato entro 30 secondi. Non avviare altre copie: consulta server-error.log e riprova quando il processo e chiuso.'
+        $healthDetail = if ($script:LastHealthError) { " Dettaglio controllo locale: $script:LastHealthError" } else { '' }
+        throw "Avvio non completato entro 30 secondi. Non avviare altre copie: consulta server-error.log e riprova quando il processo e chiuso.$healthDetail"
     }
     $child.WaitForExit()
     if ($child.ExitCode -ne 0) {
