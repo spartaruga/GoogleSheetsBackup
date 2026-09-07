@@ -51,6 +51,7 @@ test('OAuth access denial is returned immediately with a useful error', async ()
   const callback = new URL(authUrl.searchParams.get('redirect_uri'));
   callback.searchParams.set('error', 'access_denied');
   callback.searchParams.set('state', authUrl.searchParams.get('state'));
+  const denied = assert.rejects(result, /annullato o negato/);
   assert.equal((await fetch(callback)).status, 400);
-  await assert.rejects(result, /annullato o negato/);
+  await denied;
 });
