@@ -50,6 +50,7 @@ let state = structuredClone(DEFAULT_STATE);
 let activeJob = null;
 let pendingAiPackage = null;
 let requestBusy = false;
+let authBusy = false;
 let shuttingDown = false;
 
 async function fileExists(filePath) {
@@ -148,6 +149,7 @@ async function publicState() {
     account: state.account,
     accessChecks: state.accessChecks,
     accessCheckedAt: state.accessCheckedAt,
+    authInProgress: authBusy,
     activeJob: activeJob ? { id: activeJob.id, status: activeJob.status, progress: activeJob.progress } : null,
   };
 }
@@ -735,25 +737,37 @@ async function handleApi(request, response, pathname) {
   if (pathname === "/api/auth" && request.method === "POST") {
     const payload = await readJson(request);
     if (payload.mode && !["backup", "publish"].includes(payload.mode)) throw new Error("Modalità accesso non valida.");
-    const result = await authorizeInteractive(CREDENTIALS_PATH, TOKEN_PATH, state.projects, payload.mode || "backup");
-    state.account = result.user;
-    state.accessChecks = result.checks;
-    state.accessCheckedAt = result.checkedAt;
-    await saveState();
-    return sendJson(response, 200, result);
+    if (authBusy) return sendJson(response, 409, { error: "Un collegamento Google è già in corso." });
+    authBusy = true;
+    try {
+      const result = await authorizeInteractive(CREDENTIALS_PATH, TOKEN_PATH, state.projects, payload.mode || "backup");
+      state.account = result.user;
+      state.accessChecks = result.checks;
+      state.accessCheckedAt = result.checkedAt;
+      await saveState();
+      return sendJson(response, 200, result);
+    } finally {
+      authBusy = false;
+    }
   }
   if (pathname === "/api/auth/test" && request.method === "POST") {
-    const payload = await readJson(request);
-    const result = await testConnection(
-      CREDENTIALS_PATH,
-      TOKEN_PATH,
-      payload.identityOnly === true ? [] : state.projects,
-    );
-    state.account = result.user;
-    state.accessChecks = result.checks;
-    state.accessCheckedAt = result.checkedAt;
-    await saveState();
-    return sendJson(response, 200, result);
+    if (authBusy) return sendJson(response, 409, { error: "Completa o chiudi prima il collegamento Google in corso." });
+    authBusy = true;
+    try {
+      const payload = await readJson(request);
+      const result = await testConnection(
+        CREDENTIALS_PATH,
+        TOKEN_PATH,
+        payload.identityOnly === true ? [] : state.projects,
+      );
+      state.account = result.user;
+      state.accessChecks = result.checks;
+      state.accessCheckedAt = result.checkedAt;
+      await saveState();
+      return sendJson(response, 200, result);
+    } finally {
+      authBusy = false;
+    }
   }
   if (pathname === "/api/auth" && request.method === "DELETE") {
     if (await fileExists(TOKEN_PATH)) await fsp.unlink(TOKEN_PATH);
@@ -890,7 +904,9 @@ const server = http.createServer(async (request, response) => {
     const url = new URL(request.url || "/", `http://${request.headers.host}`);
     if (url.pathname.startsWith("/api/")) {
       if (shuttingDown) return sendJson(response, 409, { error: "Chiusura del programma in corso." });
-      if (!["GET", "HEAD"].includes(request.method) && !["/api/job/cancel", "/api/shutdown"].includes(url.pathname)) {
+      const authEndpoint = ["/api/auth", "/api/auth/test"].includes(url.pathname);
+      if (!["GET", "HEAD"].includes(request.method) && !["/api/job/cancel", "/api/shutdown"].includes(url.pathname) && !authEndpoint) {
+        if (authBusy) return sendJson(response, 409, { error: "Collegamento Google in corso. Completa il login oppure chiudi il programma." });
         if (requestBusy || activeJob?.status === "running") return sendJson(response, 409, { error: "Operazione in corso. Attendi il completamento e riprova." });
         requestBusy = true;
         ownsBusy = true;
