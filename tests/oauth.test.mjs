@@ -20,7 +20,8 @@ test('OAuth uses loopback, validates state and PKCE before exchanging code', asy
   await ready;
   const callback = new URL(authUrl.searchParams.get('redirect_uri'));
   assert.equal(callback.hostname, '127.0.0.1');
-  assert.equal(authUrl.searchParams.get('prompt'), 'consent');
+  assert.equal(authUrl.searchParams.get('prompt'), 'consent select_account');
+  assert.equal(authUrl.searchParams.get('include_granted_scopes'), 'true');
   assert.equal(authUrl.searchParams.get('code_challenge_method'), 'S256');
   callback.searchParams.set('code', 'synthetic'); callback.searchParams.set('state', 'wrong');
   assert.equal((await fetch(callback)).status, 400); assert.equal(exchanged, 0);
@@ -33,4 +34,23 @@ test('abandoned OAuth login times out and releases callback port', async () => {
   let callback;
   await assert.rejects(authenticateDesktop({ keys: { client_id: 'demo', client_secret: 'demo' }, scopes: [], open(url) { callback = new URL(url).searchParams.get('redirect_uri'); }, timeoutMs: 40 }), /scaduto/);
   await assert.rejects(fetch(callback));
+});
+
+
+test('OAuth access denial is returned immediately with a useful error', async () => {
+  let authUrl;
+  let started;
+  const ready = new Promise(resolve => { started = resolve; });
+  const result = authenticateDesktop({
+    keys: { client_id: 'demo', client_secret: 'demo' },
+    scopes: ['demo.readonly'],
+    open(url) { authUrl = new URL(url); started(); },
+    timeoutMs: 3000,
+  });
+  await ready;
+  const callback = new URL(authUrl.searchParams.get('redirect_uri'));
+  callback.searchParams.set('error', 'access_denied');
+  callback.searchParams.set('state', authUrl.searchParams.get('state'));
+  assert.equal((await fetch(callback)).status, 400);
+  await assert.rejects(result, /annullato o negato/);
 });
