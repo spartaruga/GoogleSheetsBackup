@@ -220,8 +220,13 @@ async function saveCredentials(client, credentialsPath, tokenPath) {
   await writeTokenPayload(tokenPath, payload);
 }
 
-export async function authorizeInteractive(credentialsPath, tokenPath, projects = [], mode = "backup") {
+export async function authorizeInteractive(credentialsPath, tokenPath, projects = [], mode = "backup", options = {}) {
+  const { signal, onUrl } = options;
+  const throwIfCancelled = () => {
+    if (signal?.aborted) throw new Error("Collegamento Google annullato.");
+  };
   await validateCredentialsFile(credentialsPath);
+  throwIfCancelled();
   const scopes = mode === "publish" ? PUBLISH_SCOPES : SCOPES;
   // Desktop OAuth needs a new explicit consent; do not silently switch accounts.
   let previousEmail = null;
@@ -230,7 +235,8 @@ export async function authorizeInteractive(credentialsPath, tokenPath, projects 
     previousEmail = previous.user.emailAddress;
   }
   const keys = JSON.parse(await fsp.readFile(credentialsPath, "utf8")).installed;
-  const client = await authenticateDesktop({ keys, scopes });
+  const client = await authenticateDesktop({ keys, scopes, signal, onUrl });
+  throwIfCancelled();
   if (previousEmail) {
     const about = (await google.drive({ version: "v3", auth: client }).about.get(
       { fields: "user(emailAddress)" }, { timeout: 30000 },
@@ -239,8 +245,21 @@ export async function authorizeInteractive(credentialsPath, tokenPath, projects 
       throw new Error("Hai scelto un account diverso. Il collegamento precedente è stato conservato. Riprova con lo stesso account.");
     }
   }
-  await saveCredentials(client, credentialsPath, tokenPath);
-  return testConnection(credentialsPath, tokenPath, projects);
+  throwIfCancelled();
+  try {
+    await saveCredentials(client, credentialsPath, tokenPath);
+    throwIfCancelled();
+    const result = await testConnection(credentialsPath, tokenPath, projects);
+    throwIfCancelled();
+    return result;
+  } catch (error) {
+    if (signal?.aborted) {
+      await fsp.rm(tokenPath, { force: true });
+      await fsp.rm(`${tokenPath}.tmp`, { force: true });
+      throw new Error("Collegamento Google annullato.");
+    }
+    throw error;
+  }
 }
 
 export async function testConnection(credentialsPath, tokenPath, projects = []) {

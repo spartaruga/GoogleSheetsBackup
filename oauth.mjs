@@ -7,7 +7,14 @@ import { openBrowser } from "./browser.mjs";
 // validate state, use PKCE, and always release the listener after two minutes.
 // A shorter timeout avoids leaving the desktop UI apparently frozen when the
 // browser is closed or Google never returns to the loopback callback.
-export async function authenticateDesktop({ keys, scopes, open = openBrowser, timeoutMs = 120000 }) {
+export async function authenticateDesktop({
+  keys,
+  scopes,
+  open = openBrowser,
+  timeoutMs = 120000,
+  signal,
+  onUrl,
+}) {
   const client = new google.auth.OAuth2(keys.client_id, keys.client_secret);
   const state = crypto.randomBytes(32).toString("base64url");
   const verifier = crypto.randomBytes(48).toString("base64url");
@@ -21,12 +28,14 @@ export async function authenticateDesktop({ keys, scopes, open = openBrowser, ti
       if (finished) return;
       finished = true;
       clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
       try { server.close(); } catch {}
       server.closeIdleConnections?.();
       server.closeAllConnections?.();
       if (error) reject(error);
       else resolve(client);
     };
+    const abort = () => finish(new Error("Collegamento Google annullato."));
     const finishAfterResponse = (res, error) => {
       res.once("finish", () => finish(error));
     };
@@ -78,15 +87,20 @@ export async function authenticateDesktop({ keys, scopes, open = openBrowser, ti
       }
     });
     server.on("error", () => finish(new Error("Impossibile avviare il collegamento locale a Google.")));
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) return abort();
     server.listen(0, "127.0.0.1", () => {
+      if (signal?.aborted) return abort();
       redirectUri = `http://127.0.0.1:${server.address().port}/oauth2callback`;
       timer = setTimeout(() => finish(new Error("Tempo per l'accesso Google scaduto. Premi di nuovo Collega account.")), timeoutMs);
       try {
-        open(client.generateAuthUrl({
+        const authUrl = client.generateAuthUrl({
           redirect_uri: redirectUri, access_type: "offline", prompt: "consent select_account",
           include_granted_scopes: true,
           scope: scopes, state, code_challenge: challenge, code_challenge_method: "S256",
-        }));
+        });
+        onUrl?.(authUrl);
+        open(authUrl);
       } catch { finish(new Error("Impossibile aprire il browser per l'accesso Google.")); }
     });
   });

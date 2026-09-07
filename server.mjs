@@ -51,6 +51,7 @@ let activeJob = null;
 let pendingAiPackage = null;
 let requestBusy = false;
 let authBusy = false;
+let authAttempt = null;
 let shuttingDown = false;
 
 async function fileExists(filePath) {
@@ -150,6 +151,9 @@ async function publicState() {
     accessChecks: state.accessChecks,
     accessCheckedAt: state.accessCheckedAt,
     authInProgress: authBusy,
+    authCancelable: Boolean(authAttempt),
+    authUrl: authAttempt?.url || null,
+    authStartedAt: authAttempt?.startedAt || null,
     activeJob: activeJob ? { id: activeJob.id, status: activeJob.status, progress: activeJob.progress } : null,
   };
 }
@@ -738,16 +742,40 @@ async function handleApi(request, response, pathname) {
     const payload = await readJson(request);
     if (payload.mode && !["backup", "publish"].includes(payload.mode)) throw new Error("Modalità accesso non valida.");
     if (authBusy) return sendJson(response, 409, { error: "Un collegamento Google è già in corso." });
+    const attempt = {
+      id: crypto.randomUUID(),
+      controller: new AbortController(),
+      url: null,
+      startedAt: new Date().toISOString(),
+    };
+    authAttempt = attempt;
     authBusy = true;
     try {
-      const result = await authorizeInteractive(CREDENTIALS_PATH, TOKEN_PATH, state.projects, payload.mode || "backup");
+      const result = await authorizeInteractive(
+        CREDENTIALS_PATH,
+        TOKEN_PATH,
+        state.projects,
+        payload.mode || "backup",
+        {
+          signal: attempt.controller.signal,
+          onUrl: (url) => {
+            if (authAttempt === attempt) attempt.url = url;
+          },
+        },
+      );
+      if (authAttempt !== attempt || attempt.controller.signal.aborted) {
+        throw new Error("Collegamento Google annullato.");
+      }
       state.account = result.user;
       state.accessChecks = result.checks;
       state.accessCheckedAt = result.checkedAt;
       await saveState();
       return sendJson(response, 200, result);
     } finally {
-      authBusy = false;
+      if (authAttempt === attempt) {
+        authAttempt = null;
+        authBusy = false;
+      }
     }
   }
   if (pathname === "/api/auth/test" && request.method === "POST") {
@@ -770,7 +798,15 @@ async function handleApi(request, response, pathname) {
     }
   }
   if (pathname === "/api/auth" && request.method === "DELETE") {
-    if (await fileExists(TOKEN_PATH)) await fsp.unlink(TOKEN_PATH);
+    if (authBusy && !authAttempt) {
+      return sendJson(response, 409, { error: "Verifica account in corso. Attendi il completamento." });
+    }
+    const attempt = authAttempt;
+    authAttempt = null;
+    authBusy = false;
+    attempt?.controller.abort();
+    await fsp.rm(TOKEN_PATH, { force: true });
+    await fsp.rm(`${TOKEN_PATH}.tmp`, { force: true });
     state.account = null;
     state.accessChecks = [];
     state.accessCheckedAt = null;

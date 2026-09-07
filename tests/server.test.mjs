@@ -103,3 +103,31 @@ test('corrupt configuration is preserved and startup fails', async t => {
   assert.notEqual((await once(child, 'exit'))[0], 0);
   assert.equal(await fs.readFile(path.join(directory, 'state.json'), 'utf8'), '{broken');
 });
+
+test('pending OAuth exposes a fallback link and disconnect cancels and cleans it', async t => {
+  const directory = await temporary(t);
+  await fs.writeFile(path.join(directory, 'credentials.json'), JSON.stringify({
+    installed: { client_id: 'demo', client_secret: 'demo', project_id: 'demo' },
+  }));
+  const app = await start(t, directory);
+  const login = app.call('/api/auth', { mode: 'backup' });
+  let state;
+  for (let i = 0; i < 100; i++) {
+    state = await (await app.call('/api/state')).json();
+    if (state.authUrl) break;
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  assert.equal(state.authInProgress, true);
+  assert.equal(state.authCancelable, true);
+  assert.match(state.authUrl, /^https:\/\/accounts\.google\.com\//);
+  const disconnected = await app.call('/api/auth', undefined, { method: 'DELETE', headers, body: '{}' });
+  assert.equal(disconnected.status, 200);
+  assert.equal((await login).status, 400);
+  state = await (await app.call('/api/state')).json();
+  assert.equal(state.authInProgress, false);
+  assert.equal(state.authCancelable, false);
+  assert.equal(state.authUrl, null);
+  await assert.rejects(fs.access(path.join(directory, 'token.json')));
+  await assert.rejects(fs.access(path.join(directory, 'token.json.tmp')));
+  await stop(app);
+});

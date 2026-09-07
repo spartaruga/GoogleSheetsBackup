@@ -9,6 +9,8 @@ const ui = {
   credentialsText: document.querySelector("#credentialsText"),
   loginStatus: document.querySelector("#loginStatus"),
   loginText: document.querySelector("#loginText"),
+  manualAuthWrap: document.querySelector("#manualAuthWrap"),
+  manualAuthLink: document.querySelector("#manualAuthLink"),
   tokenProtectionText: document.querySelector("#tokenProtectionText"),
   accessDetails: document.querySelector("#accessDetails"),
   projectsBody: document.querySelector("#projectsBody"),
@@ -41,6 +43,7 @@ let toastTimer = null;
 let jobTimer = null;
 let automaticAccountCheckAttempted = false;
 let authWaitTimer = null;
+let authOperation = 0;
 
 async function api(url, options = {}) {
   const requestOptions = { cache: "no-store", ...options };
@@ -93,8 +96,12 @@ function renderSetup(state) {
     + (item.spreadsheet?.ok === false ? 1 : 0)
     + (item.appsScript?.ok === false ? 1 : 0), 0);
   const tokenInvalid = state.tokenProtection === "invalid";
-  setDot(ui.loginStatus, !state.tokenConfigured ? "warn" : (failedChecks || tokenInvalid) ? "error" : "ok");
-  if (tokenInvalid) {
+  setDot(ui.loginStatus, state.authInProgress || !state.tokenConfigured ? "warn" : (failedChecks || tokenInvalid) ? "error" : "ok");
+  if (state.authCancelable) {
+    ui.loginText.textContent = "Collegamento Google in corso. Completa il login oppure annullalo.";
+  } else if (state.authInProgress) {
+    ui.loginText.textContent = "Verifica account Google in corso…";
+  } else if (tokenInvalid) {
     ui.loginText.textContent = "Token locale non valido: scollega e collega di nuovo l'account";
   } else if (!state.tokenConfigured) {
     ui.loginText.textContent = "Account non collegato";
@@ -104,6 +111,15 @@ function renderSetup(state) {
   } else {
     ui.loginText.textContent = "Account collegato; usa Verifica accesso per identificarlo e controllare i progetti";
   }
+
+  if (state.authInProgress && state.authUrl) {
+    ui.manualAuthLink.href = state.authUrl;
+    ui.manualAuthWrap.hidden = false;
+  } else if (!state.authInProgress) {
+    ui.manualAuthLink.removeAttribute("href");
+    ui.manualAuthWrap.hidden = true;
+  }
+  setAuthButtonsBusy(state.authInProgress, state.authCancelable);
 
   if (state.tokenProtection === "dpapi") {
     ui.tokenProtectionText.textContent = "Token locale cifrato con la protezione dell'utente Windows.";
@@ -295,6 +311,7 @@ async function refreshState({ identifySavedAccount = true } = {}) {
     && !automaticAccountCheckAttempted
     && state.credentialsConfigured
     && state.tokenConfigured
+    && !state.authInProgress
     && !state.account?.emailAddress
     && state.tokenProtection !== "invalid"
   ) {
@@ -351,8 +368,8 @@ function setButtonsBusy(isBusy) {
   });
 }
 
-function setAuthButtonsBusy(isBusy) {
-  ["loginButton", "testLoginButton", "logoutButton", "credentialsButton", "enablePublishButton"].forEach((id) => {
+function setAuthButtonsBusy(isBusy, canCancel = false) {
+  ["loginButton", "testLoginButton", "credentialsButton", "enablePublishButton"].forEach((id) => {
     const button = document.querySelector(`#${id}`);
     if (!button) return;
     if (isBusy) {
@@ -363,6 +380,9 @@ function setAuthButtonsBusy(isBusy) {
       delete button.dataset.disabledBeforeAuth;
     }
   });
+  const logoutButton = document.querySelector("#logoutButton");
+  logoutButton.disabled = isBusy && !canCancel;
+  logoutButton.textContent = isBusy && canCancel ? "Annulla e scollega" : "Scollega";
 }
 
 function startAuthWaitMessage() {
@@ -382,14 +402,41 @@ function stopAuthWaitMessage() {
   authWaitTimer = null;
 }
 
+async function watchAuthUrl(operation) {
+  const deadline = Date.now() + 5000;
+  let started = false;
+  while (operation === authOperation) {
+    try {
+      const state = await api("/api/state");
+      if (operation !== authOperation) return;
+      if (state.authUrl) {
+        ui.manualAuthLink.href = state.authUrl;
+        ui.manualAuthWrap.hidden = false;
+        return;
+      }
+      started ||= state.authInProgress;
+      if (started && !state.authInProgress) return;
+      if (!started && Date.now() >= deadline) return;
+    } catch { /* The main request reports useful errors. */ }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+}
+
 async function accountAction(action) {
-  setAuthButtonsBusy(true);
+  const operation = ++authOperation;
+  const interactive = action === "login" || action === "publish";
+  setAuthButtonsBusy(true, interactive);
   try {
     let result = null;
-    if (action === "login" || action === "publish") {
+    if (interactive) {
+      ui.manualAuthLink.removeAttribute("href");
+      ui.manualAuthWrap.hidden = true;
       startAuthWaitMessage();
-      showToast("Completa l'accesso nel browser. L'app resta utilizzabile e il collegamento scade dopo 2 minuti.");
-      result = await api("/api/auth", { method: "POST", body: JSON.stringify({ mode: action === "publish" ? "publish" : "backup" }) });
+      showToast("Completa l'accesso nel browser. Se non si apre, usa il link che compare qui.");
+      const request = api("/api/auth", { method: "POST", body: JSON.stringify({ mode: action === "publish" ? "publish" : "backup" }) });
+      watchAuthUrl(operation);
+      result = await request;
+      if (operation !== authOperation) return;
       showToast(result.failedCount ? `Account collegato, ma ${result.failedCount} accessi richiedono attenzione.` : "Account Google collegato e verificato.", result.failedCount > 0);
     } else if (action === "test") {
       ui.loginText.textContent = "Verifica account Google in corso…";
@@ -397,16 +444,22 @@ async function accountAction(action) {
       showToast(result.failedCount ? `Verifica completata: ${result.failedCount} accessi non disponibili.` : "Accesso Google verificato per tutti i progetti.", result.failedCount > 0);
     } else {
       await api("/api/auth", { method: "DELETE", body: "{}" });
-      showToast("Account scollegato da questo PC.");
+      ui.manualAuthLink.removeAttribute("href");
+      ui.manualAuthWrap.hidden = true;
+      showToast("Tentativo annullato e account scollegato da questo PC.");
     }
+    if (operation !== authOperation) return;
     await refreshState();
   } catch (error) {
+    if (operation !== authOperation) return;
     setDot(ui.loginStatus, "error");
     ui.loginText.textContent = error.message;
     showToast(error.message, true);
   } finally {
-    stopAuthWaitMessage();
-    setAuthButtonsBusy(false);
+    if (operation === authOperation) {
+      stopAuthWaitMessage();
+      setAuthButtonsBusy(false);
+    }
   }
 }
 

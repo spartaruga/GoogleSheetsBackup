@@ -24,7 +24,7 @@ Il Setup non è firmato digitalmente in questa versione. Windows può mostrare �
 5. In **Clients → Create client**, scegli **Desktop app**. Scarica il JSON.
 6. Nel programma, in **Configurazione**, premi **Seleziona JSON** e scegli quel file.
 7. Apri le [impostazioni Apps Script](https://script.google.com/home/usersettings) e attiva **API Google Apps Script** per il tuo account.
-8. Premi **Collega account**. Nel browser scegli l'account che ha accesso ai Fogli e agli script e accetta i permessi.
+8. Premi **Collega account**. Nel browser scegli l'account che ha accesso ai Fogli e agli script e accetta i permessi. Se il browser non si apre, usa **Apri l'accesso Google** mostrato sotto ai pulsanti. Durante il tentativo puoi usare **Annulla e scollega** e ricominciare subito.
 9. Premi **Verifica accesso** dopo aver aggiunto i progetti. Leggi gli eventuali errori accanto a ciascun progetto.
 
 Il JSON OAuth va distribuito separatamente dal programma alle sole persone autorizzate. Ogni persona deve collegare il proprio account. Non condividere token personali. La disponibilità degli accessi dipende anche dalle regole dell'amministratore Workspace.
@@ -127,7 +127,7 @@ Per disinstallare: **Impostazioni Windows → App → App installate → Google 
 - **Porta occupata:** il server prova la porta storica 47831 e, se occupata da altro, chiede al sistema una porta libera. Il launcher legge la porta effettiva. Non servono porte in ingresso sul router.
 - **Blocco locale non leggibile dopo un arresto anomalo:** riavvia Windows. Solo dopo aver verificato che GWB non sia in esecuzione, rimuovi `instance.json`, `instance.lock` e l'eventuale `instance.lock.recovery` dal profilo. Non rimuovere `state.json` o token.
 - **`state.json` non valido:** il programma si ferma senza sovrascriverlo. Conservane una copia e ripristina una versione valida.
-- **Login scaduto/negato:** ripremi Collega account. Il callback si chiude dopo cinque minuti.
+- **Login scaduto/negato:** ripremi Collega account. Il callback si chiude dopo due minuti. Puoi interromperlo prima con **Annulla e scollega**.
 - **Access blocked:** controlla test user, audience e regole Workspace. Un'app OAuth External in Testing può richiedere una nuova autorizzazione dopo la scadenza del refresh token; consulta le regole OAuth Google per il tuo caso.
 - **API disabilitata:** abilitala nello stesso progetto Cloud del JSON importato.
 - **Not found/Permission denied:** verifica l'account, gli ID e l'accesso ai documenti.
