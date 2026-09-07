@@ -19,10 +19,14 @@ export async function authenticateDesktop({ keys, scopes, open = openBrowser, ti
       if (finished) return;
       finished = true;
       clearTimeout(timer);
-      server.close();
-      server.closeAllConnections();
+      try { server.close(); } catch {}
+      server.closeIdleConnections?.();
+      server.closeAllConnections?.();
       if (error) reject(error);
       else resolve(client);
+    };
+    const finishAfterResponse = (res, error) => {
+      res.once("finish", () => finish(error));
     };
     const server = http.createServer(async (req, res) => {
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
@@ -36,19 +40,39 @@ export async function authenticateDesktop({ keys, scopes, open = openBrowser, ti
       if (exchanging) { res.writeHead(409).end("Accesso in corso."); return; }
       exchanging = true;
       try {
-        if (url.searchParams.has("error")) throw new Error("Accesso Google annullato o negato. Riprova dal programma.");
+        const oauthError = url.searchParams.get("error");
+        if (oauthError) {
+          const message = oauthError === "access_denied"
+            ? "Accesso Google annullato o negato. Riprova dal programma."
+            : `Google ha rifiutato l'accesso (${oauthError}). Riprova dal programma.`;
+          finishAfterResponse(res, new Error(message));
+          res.writeHead(400).end("Accesso Google non completato. Puoi chiudere questa scheda e tornare al programma.");
+          return;
+        }
         const code = url.searchParams.get("code");
-        if (!code) throw new Error("Codice Google mancante. Riprova dal programma.");
+        if (!code) {
+          finishAfterResponse(res, new Error("Codice Google mancante. Riprova dal programma."));
+          res.writeHead(400).end("Codice Google mancante. Puoi chiudere questa scheda e tornare al programma.");
+          return;
+        }
         client.transporter.defaults = { ...client.transporter.defaults, timeout: 30000 };
         const { tokens } = await client.getToken({ code, codeVerifier: verifier, redirect_uri: redirectUri });
         if (finished) return;
         client.setCredentials(tokens);
-        res.end("Accesso completato. Torna a Google Workspace Backup.");
-        finish();
-      } catch {
-        res.end("Accesso non completato. Torna al programma e riprova.");
-        // Do not expose OAuth codes/tokens from HTTP library errors.
-        finish(new Error("Accesso Google non completato. Controlla consenso e connessione, poi riprova."));
+        finishAfterResponse(res);
+        res.end("Accesso completato. Puoi chiudere questa scheda e tornare a Google Workspace Backup.");
+      } catch (error) {
+        const googleCode = String(error?.response?.data?.error || "");
+        let message = "Accesso Google non completato. Controlla consenso e connessione, poi riprova.";
+        if (googleCode === "redirect_uri_mismatch") {
+          message = "Redirect OAuth rifiutato da Google. Verifica che il JSON sia di tipo Applicazione desktop.";
+        } else if (googleCode === "invalid_client") {
+          message = "Credenziali OAuth rifiutate da Google. Scarica di nuovo il JSON del client Desktop.";
+        } else if (googleCode === "invalid_grant") {
+          message = "Google ha rifiutato il codice di accesso. Premi di nuovo Collega account e completa il consenso una sola volta.";
+        }
+        finishAfterResponse(res, new Error(message));
+        res.writeHead(400).end("Accesso Google non completato. Puoi chiudere questa scheda e tornare al programma.");
       }
     });
     server.on("error", () => finish(new Error("Impossibile avviare il collegamento locale a Google.")));
@@ -57,7 +81,8 @@ export async function authenticateDesktop({ keys, scopes, open = openBrowser, ti
       timer = setTimeout(() => finish(new Error("Tempo per l'accesso Google scaduto. Premi di nuovo Collega account.")), timeoutMs);
       try {
         open(client.generateAuthUrl({
-          redirect_uri: redirectUri, access_type: "offline", prompt: "consent",
+          redirect_uri: redirectUri, access_type: "offline", prompt: "consent select_account",
+          include_granted_scopes: true,
           scope: scopes, state, code_challenge: challenge, code_challenge_method: "S256",
         }));
       } catch { finish(new Error("Impossibile aprire il browser per l'accesso Google.")); }
