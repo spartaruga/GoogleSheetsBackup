@@ -4,8 +4,10 @@ import { google } from "googleapis";
 import { openBrowser } from "./browser.mjs";
 
 // Keep the existing Google client, but bind its temporary callback to loopback,
-// validate state, use PKCE, and always release the listener after five minutes.
-export async function authenticateDesktop({ keys, scopes, open = openBrowser, timeoutMs = 300000 }) {
+// validate state, use PKCE, and always release the listener after two minutes.
+// A shorter timeout avoids leaving the desktop UI apparently frozen when the
+// browser is closed or Google never returns to the loopback callback.
+export async function authenticateDesktop({ keys, scopes, open = openBrowser, timeoutMs = 120000 }) {
   const client = new google.auth.OAuth2(keys.client_id, keys.client_secret);
   const state = crypto.randomBytes(32).toString("base64url");
   const verifier = crypto.randomBytes(48).toString("base64url");
