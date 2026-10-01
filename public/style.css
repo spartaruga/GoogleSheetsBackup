@@ -28,7 +28,7 @@ body {
   font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
-button, input { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 
 .topbar {
@@ -48,10 +48,20 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .topbar p { margin: 6px 0 0; color: #cbd8e3; }
 .eyebrow { color: #8fc4ee; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
 .top-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.diagnostic-controls { display: flex; gap: 16px; flex-wrap: wrap; align-items: end; }
+.diagnostic-controls label { display: grid; gap: 5px; min-width: 180px; }
+.diagnostic-controls select, .diagnostic-controls input[type="text"], .trigger-table select, .trigger-table input, #triggerInventoryInput { padding: 8px; border: 1px solid var(--border); border-radius: 7px; max-width: 100%; }
+.diagnostic-controls .check { display: flex; align-items: center; padding-bottom: 8px; }
+.diagnostic-output { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 340px; overflow: auto; background: var(--bg); padding: 12px; font-size: 13px; }
+.diagnostic-table { min-width: 680px; }
+.trigger-table { margin-top: 18px; min-width: 980px; }
+.trigger-table select { max-width: 280px; }
+.trigger-table input { width: 120px; }
+#triggerInventoryInput { width: 100%; }
 
 .steps {
   display: grid;
-  grid-template-columns: repeat(5, minmax(110px, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 1px;
   position: sticky;
   top: 0;

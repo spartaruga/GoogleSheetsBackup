@@ -1,5 +1,30 @@
 # Changelog
 
+## 3.4.0 — 2026-10-01
+
+### Installer e Release
+
+- Un unico Setup Windows x64 con Node.js e dipendenze inclusi, avvio a fine installazione e dati personali conservati negli aggiornamenti.
+- Pubblicazione automatica della Release dopo build, controlli e smoke test Windows. PR: solo controlli, senza pubblicazione.
+- EXE, ZIP sorgente e SHA-256 pubblicati insieme; la Release resta in bozza fino alla verifica degli asset.
+- Pulsante Controlla aggiornamenti con link al repository ufficiale, senza esecuzione automatica di file scaricati.
+
+### Trigger ed esecuzioni
+
+- Nuova pagina per scaricare 1, 7 o 30 giorni di esecuzioni, CSV, JSON e riepilogo per funzione.
+- Conteggio errori, timeout, attese per quota, durata massima/media e avvii automatici fuori 20:00–08:30 Europe/Rome.
+- Log Cloud con messaggi e stack, quando accessibili; versioni e deployment con avvisi per dati parziali o non autorizzati.
+- Consenso diagnostica separato; mantiene i permessi già concessi di pubblicazione.
+- Piano per creare, sostituire e rimuovere trigger orari selezionati, con preset notturno del gestionale e copia di sicurezza dei sorgenti.
+- Applicazione manuale con gwbApplyTriggerPlan nell’editor Apps Script: Google non permette la creazione dei trigger via API. Ripresa delle regole incomplete senza rifare quelle completate.
+- Inventario dei trigger tramite gwbExportTriggers. Gli orari dei trigger di altri installer non sono esposti da Google.
+
+### Verifiche
+
+- 33 test automatici locali superati; API Google e trigger simulati, senza credenziali reali.
+- Corrette due versioni transitive di brace-expansion segnalate dal controllo npm.
+- Installer non firmato digitalmente. Configurazione OAuth e autorizzazione Google iniziale restano necessarie.
+
 ## 3.3.2 — 2026-09-07
 
 ### Accesso Google

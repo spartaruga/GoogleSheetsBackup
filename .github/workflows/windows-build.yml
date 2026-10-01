@@ -2,13 +2,24 @@ name: Windows build
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish a Release after all checks pass
+        type: boolean
+        default: false
   push:
+    branches:
+      - main
     tags:
       - "v*"
   pull_request:
 
 permissions:
   contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -63,11 +74,18 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          choco install innosetup --yes --no-progress
-
-          if ($LASTEXITCODE) {
-            exit $LASTEXITCODE
-          }
+          $runtime = Get-Content scripts/runtime.json -Raw | ConvertFrom-Json
+          $expectedUrl = "https://github.com/jrsoftware/issrc/releases/download/is-$($runtime.innoVersion.Replace('.', '_'))/innosetup-$($runtime.innoVersion).exe"
+          if ($runtime.innoUrl -ne $expectedUrl -or $runtime.innoSha256 -notmatch '^[a-f0-9]{64}$') { throw 'Invalid Inno Setup pin' }
+          $setup = Join-Path $env:RUNNER_TEMP 'inno-setup.exe'
+          $directory = Join-Path $env:RUNNER_TEMP 'Inno Setup compiler'
+          Invoke-WebRequest $runtime.innoUrl -OutFile $setup
+          if ((Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant() -ne $runtime.innoSha256) { throw 'Inno Setup checksum mismatch' }
+          $process = Start-Process $setup -ArgumentList ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="' + $directory + '"') -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Inno Setup install failed: $($process.ExitCode)" }
+          $compiler = Join-Path $directory 'ISCC.exe'
+          if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler missing' }
+          "ISCC_PATH=$compiler" >> $env:GITHUB_ENV
 
       - name: Build and package
         shell: pwsh
@@ -95,3 +113,22 @@ jobs:
           name: GoogleWorkspaceBackup-release
           path: release/*
           if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: GoogleWorkspaceBackup-release
+          path: release
+      - name: Publish verified installer and source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: node scripts/publish-release.mjs

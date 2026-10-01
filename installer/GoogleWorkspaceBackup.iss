@@ -28,6 +28,8 @@ AppMutex=Local\GoogleWorkspaceBackup
 CloseApplications=no
 RestartApplications=no
 DisableProgramGroupPage=yes
+DisableDirPage=yes
+DisableWelcomePage=yes
 SetupLogging=no
 
 [Languages]

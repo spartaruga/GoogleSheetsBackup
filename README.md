@@ -4,7 +4,7 @@ Programma Windows per salvare Fogli Google e progetti Apps Script sul proprio PC
 
 ## Installazione per chi deve usare il programma
 
-1. Nella sezione **Releases** del repository scarica `GoogleWorkspaceBackup-Setup-X.Y.Z.exe` e il relativo `.sha256`.
+1. Apri la [Release più recente](https://github.com/spartaruga/GoogleSheetsBackup/releases/latest) e scarica **solo `GoogleWorkspaceBackup-Setup-X.Y.Z.exe`**. Il file `.sha256` serve se vuoi verificare il download.
 2. Avvia l'installer e premi **Avanti → Installa**. Il collegamento Desktop è facoltativo.
 3. Apri **Google Workspace Backup** dal menu Start.
 4. Completa la configurazione Google qui sotto.
@@ -39,6 +39,9 @@ Fonti: [creazione credenziali Google](https://developers.google.com/workspace/gu
 | Leggere dati, formule, note e formati Sheets | `https://www.googleapis.com/auth/spreadsheets.readonly` |
 | Primo login: leggere Apps Script | `https://www.googleapis.com/auth/script.projects.readonly` |
 | Solo dopo “Abilita pubblicazione”: aggiornare Apps Script | `https://www.googleapis.com/auth/script.projects` |
+| Solo dopo “Abilita diagnostica”: esecuzioni | `https://www.googleapis.com/auth/script.processes` |
+| Diagnostica: log Cloud disponibili all’account | `https://www.googleapis.com/auth/logging.read` |
+| Diagnostica: inventario deployment | `https://www.googleapis.com/auth/script.deployments.readonly` |
 
 Il programma non richiede lo scope di scrittura di Sheets. Il codice Apps Script che scegli di pubblicare può però modificare dati quando viene eseguito da Google: controllalo prima.
 
@@ -77,6 +80,22 @@ Il JSON nativo è il riferimento per le formule Google; Excel può convertirle o
 
 **Non vengono salvati automaticamente:** cronologia revisioni completa, file collegati tramite URL, allegati Drive, proprietà Script/User/Document Properties, trigger installabili, deployment/versioni Apps Script precedenti, impostazioni Google Cloud e autorizzazioni necessarie a ricostruire tutto. Non è un ripristino completo con un clic. Vengono salvati i contenuti che le API e l'account rendono disponibili, non una clonazione integrale di Google Workspace.
 
+## Trigger ed esecuzioni
+
+1. Apri **Trigger ed esecuzioni**, scegli un progetto con Script ID e premi **Abilita diagnostica**. Il nuovo consenso mantiene i permessi di pubblicazione già concessi.
+2. Scegli 1, 7 o 30 giorni e premi **Raccogli esecuzioni**.
+3. Scarica lo ZIP: contiene `esecuzioni.json`, `esecuzioni.csv` e un riepilogo. Una copia resta nella destinazione dei backup.
+
+La tabella mostra errori, timeout, durate e avvii automatici fuori 20:00–08:30 italiane. Il controllo frequente delle formule può essere un’eccezione intenzionale. Lo storico API non contiene il testo dell’errore: per quello seleziona **Includi log Cloud**, inserisci l’ID del progetto Cloud **dello script** e abilita Cloud Logging API. Serve un progetto Cloud standard e accesso ai suoi log. Se `script.googleapis.com/project_key` nei log è diverso dallo Script ID, inserisci quella chiave nell’apposito campo. Log mancanti o parziali vengono segnalati; non significano assenza di errori. Versioni e deployment disponibili vengono inclusi nel JSON.
+
+**Piano trigger:** premi **Leggi funzioni**, aggiungi le regole e prepara l’anteprima. Puoi scaricare `GWB_Triggers.gs` oppure pubblicarlo con il permesso Apps Script già usato per le Modifiche AI. Il programma salva prima una copia integrale dei sorgenti correnti e blocca conflitti e file intoccabili. Poi apri l’editor Google ed esegui **`gwbApplyTriggerPlan`**, autorizzando il servizio trigger se richiesto.
+
+Le regole sostituiscono/rimuovono solo i trigger CLOCK degli handler elencati e dell’account che esegue la funzione. Gli altri trigger restano presenti. Il piano viene applicato una regola alla volta: se una regola fallisce, quelle precedenti possono essere già applicate. Rilancia **lo stesso piano** per completarlo. Se la quota è già piena, Google può impedire anche una singola sostituzione: rimuovi una regola non necessaria prima di crearne una nuova. Gli orari sono approssimativi, ±15 minuti.
+
+Per verificare il risultato esegui **`gwbExportTriggers`** nell’editor e incolla il JSON nel riquadro inventario. Google non espone il calendario dei trigger creati da altri installer: il programma mostra l’orario solo per i trigger creati con questo gestore. Il preset notturno richiede le funzioni `gestionale_night…` già pubblicate; non elimina automaticamente i vecchi handler diversi.
+
+La pubblicazione del piano **non cambia i trigger** finché non esegui la funzione nell’editor. Le API Google non possono crearli. Fonti: [limiti dell’API](https://developers.google.com/apps-script/api/how-tos/execute#limitations), [storico processi](https://developers.google.com/apps-script/api/reference/rest/v1/processes/listScriptProcesses), [Cloud Logging](https://developers.google.com/apps-script/guides/logging).
+
 ## Privacy e uso con un'AI
 
 - Token riconoscibili: selezione iniziale **Censura**.
@@ -111,7 +130,7 @@ Su Windows il token è cifrato con DPAPI per l'utente corrente. Il JSON OAuth e 
 
 ## Aggiornamento e disinstallazione
 
-1. Aspetta il termine dei lavori e premi **Chiudi programma** anche nella vecchia versione.
+1. Premi **Controlla aggiornamenti** per aprire la Release ufficiale, poi aspetta il termine dei lavori e premi **Chiudi programma** anche nella vecchia versione.
 2. Installa il nuovo Setup nella stessa cartella.
 3. Riapri e verifica versione, account, progetti e storico.
 
@@ -158,11 +177,11 @@ Risultati:
 - File `.sha256` accanto all'installer.
 - `release/GoogleWorkspaceBackup_vX.Y.Z_source.zip`: sorgente selezionato e controllato.
 
-La build scarica il runtime ufficiale e verifica uno SHA-256 fissato nel progetto; usa `npm ci` e il lockfile. Non importa `node_modules` dal PC di sviluppo. La directory `dist` viene ricreata: non usarla per dati personali. L'installer controlla che `dist` corrisponda al manifesto della build. Se Inno è in un'altra cartella, imposta `$env:ISCC_PATH` al percorso completo di `ISCC.exe`.
+La build scarica il runtime ufficiale e verifica uno SHA-256 fissato nel progetto; usa `npm ci` e il lockfile. Il workflow scarica anche Inno Setup dalla Release ufficiale e ne verifica lo SHA-256, senza dipendere dal catalogo Chocolatey. Non importa `node_modules` dal PC di sviluppo. La directory `dist` viene ricreata: non usarla per dati personali. L'installer controlla che `dist` corrisponda al manifesto della build. Se Inno è in un'altra cartella, imposta `$env:ISCC_PATH` al percorso completo di `ISCC.exe`.
 
 Per provare solo il sorgente: dopo `npm ci --ignore-scripts`, esegui `npm start` o `Avvia.vbs`. Solo in questa modalità il launcher può usare Node globale; non installa componenti al primo avvio.
 
-**Senza preparare un PC di build:** dopo aver caricato il sorgente su GitHub, apri **Actions → Windows build → Run workflow**. Se tutti i passaggi passano, scarica l'artefatto `GoogleWorkspaceBackup-release`. Contiene il Setup e i checksum. Non viene pubblicata automaticamente una Release.
+**Senza preparare un PC di build:** il workflow **Windows build** compila e prova il Setup. Le PR producono solo un artefatto. Un push su `main` o un tag `vX.Y.Z` pubblica la Release dopo tutti i controlli. Da **Run workflow** puoi scegliere se pubblicare o produrre solo l’artefatto `GoogleWorkspaceBackup-release`.
 
 ## Pubblica su GitHub e crea una Release
 
@@ -183,10 +202,10 @@ git commit -m "Prepare Windows distribution"
 5. Abilita Secret Scanning/push protection dove disponibili e Private vulnerability reporting nelle impostazioni del repository.
 6. Avvia **Actions → Windows build**. Leggi l'esito: non distribuire build con test falliti.
 7. Scarica l'artefatto del workflow e prova il Setup su una VM Windows senza Node, usando un progetto Google di prova.
-8. In **Releases → Draft a new release**, scegli il tag `vX.Y.Z` uguale alla versione in `package.json`. Allega `.exe`, `.exe.sha256` e ZIP sorgente. Copia le note pertinenti da `CHANGELOG.md`.
-9. Conserva la Release in bozza finché login e backup reali sul progetto di prova non funzionano; poi pubblicala.
+8. Incrementa la versione in `package.json` e lockfile, aggiungi le note in `CHANGELOG.md` e integra la modifica su `main`.
+9. Il job Release crea il tag sul commit verificato, allega EXE/ZIP e checksum, controlla dimensioni e digest e pubblica la Release. Non sovrascrive una versione appartenente a un altro commit. Il login Google reale resta un controllo da fare con il tuo account e un progetto di prova.
 
-In alternativa crea e invia un tag `vX.Y.Z`: il workflow compila gli artefatti ma non pubblica da solo. [Guida ufficiale GitHub alle Release](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository).
+In alternativa crea e invia un tag `vX.Y.Z`: il workflow verifica che corrisponda a `package.json`, compila, prova e pubblica. [Guida ufficiale GitHub alle Release](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository).
 
 Per la prossima versione usa `npm version patch --no-git-tag-version`, aggiorna il changelog e ripeti i controlli. La versione eseguibile deriva da `package.json`; i riferimenti storici nella documentazione restano storici.
 

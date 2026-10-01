@@ -329,6 +329,7 @@ async function refreshState({ identifySavedAccount = true } = {}) {
     }
   }
 
+  window.dispatchEvent(new CustomEvent('gwb-state', {detail: state}));
   return state;
 }
 
@@ -342,6 +343,7 @@ async function saveSettings(showConfirmation = true) {
   currentState = state;
   renderProjects(state.projects || []);
   renderHistory(state.history || []);
+  window.dispatchEvent(new CustomEvent('gwb-state', {detail: state}));
   if (showConfirmation) showToast("Configurazione salvata.");
   return state;
 }
@@ -369,7 +371,7 @@ function setButtonsBusy(isBusy) {
 }
 
 function setAuthButtonsBusy(isBusy, canCancel = false) {
-  ["loginButton", "testLoginButton", "credentialsButton", "enablePublishButton"].forEach((id) => {
+  ["loginButton", "testLoginButton", "credentialsButton", "enablePublishButton", "enableDiagnosticsButton"].forEach((id) => {
     const button = document.querySelector(`#${id}`);
     if (!button) return;
     if (isBusy) {
@@ -424,7 +426,7 @@ async function watchAuthUrl(operation) {
 
 async function accountAction(action) {
   const operation = ++authOperation;
-  const interactive = action === "login" || action === "publish";
+  const interactive = ["login", "publish", "diagnostics"].includes(action);
   setAuthButtonsBusy(true, interactive);
   try {
     let result = null;
@@ -433,7 +435,7 @@ async function accountAction(action) {
       ui.manualAuthWrap.hidden = true;
       startAuthWaitMessage();
       showToast("Completa l'accesso nel browser. Se non si apre, usa il link che compare qui.");
-      const request = api("/api/auth", { method: "POST", body: JSON.stringify({ mode: action === "publish" ? "publish" : "backup" }) });
+      const request = api("/api/auth", { method: "POST", body: JSON.stringify({ mode: action === "login" ? "backup" : action }) });
       watchAuthUrl(operation);
       result = await request;
       if (operation !== authOperation) return;

@@ -65,6 +65,13 @@ Install-App
 $app = Start-App
 $state = Invoke-RestMethod "$($app.Url)/api/state"
 if ($state.credentialsConfigured -or $state.tokenConfigured -or $state.projects.Count) { throw 'Il primo avvio non e pulito.' }
+foreach ($module in @('diagnostics.mjs','triggers.mjs','updates.mjs')) {
+    if (-not (Test-Path (Join-Path $install "app\$module"))) { throw "Modulo non incluso nel Setup: $module" }
+}
+$diagnosticUi = Invoke-WebRequest "$($app.Url)/diagnostics.js" -UseBasicParsing
+if ($diagnosticUi.StatusCode -ne 200 -or $diagnosticUi.Content -notmatch 'collectDiagnosticsButton') { throw 'Interfaccia diagnostica non disponibile nel Setup.' }
+node tests/windows-ui.mjs $app.Url
+if ($LASTEXITCODE) { throw 'Test browser della nuova interfaccia fallito.' }
 $duplicate = Start-Process (Join-Path $install 'GoogleWorkspaceBackup.exe') -PassThru
 if (-not $duplicate.WaitForExit(15000) -or $duplicate.ExitCode -ne 0) { throw 'Secondo avvio non riutilizzato.' }
 $after = Get-Content (Join-Path $GwbProfileDirectory 'instance.json') -Raw | ConvertFrom-Json

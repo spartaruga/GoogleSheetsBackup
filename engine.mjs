@@ -15,6 +15,20 @@ export const SCOPES = [
 ];
 
 export const PUBLISH_SCOPES = [...SCOPES.slice(0, 2), "https://www.googleapis.com/auth/script.projects"];
+export const DIAGNOSTIC_SCOPES = [...SCOPES,
+  "https://www.googleapis.com/auth/script.processes",
+  "https://www.googleapis.com/auth/logging.read",
+  "https://www.googleapis.com/auth/script.deployments.readonly",
+];
+
+export function authorizationScopes(mode, previous = []) {
+  if (mode === "backup") return [...SCOPES];
+  if (!["publish", "diagnostics"].includes(mode)) throw new Error("Modalità accesso non valida.");
+  const allowed = new Set([...PUBLISH_SCOPES, ...DIAGNOSTIC_SCOPES]);
+  const scopes = new Set([...(mode === "publish" ? PUBLISH_SCOPES : DIAGNOSTIC_SCOPES), ...previous.filter(s => allowed.has(s))]);
+  if (scopes.has("https://www.googleapis.com/auth/script.projects")) scopes.delete("https://www.googleapis.com/auth/script.projects.readonly");
+  return [...scopes];
+}
 
 export function safeName(value, fallback = "backup") {
   const cleaned = String(value || fallback)
@@ -183,7 +197,7 @@ export async function validateCredentialsFile(credentialsPath) {
   };
 }
 
-async function loadAuth(credentialsPath, tokenPath) {
+export async function loadAuth(credentialsPath, tokenPath) {
   await validateCredentialsFile(credentialsPath);
   if (!(await exists(tokenPath))) throw new Error("Account Google non collegato.");
   let stored;
@@ -202,10 +216,12 @@ async function loadAuth(credentialsPath, tokenPath) {
   } else if (process.platform === "win32") {
     await writeTokenPayload(tokenPath, token);
   }
-  return google.auth.fromJSON(token);
+  const auth = google.auth.fromJSON(token);
+  auth.gwbScopes = Array.isArray(token.gwbScopes) ? token.gwbScopes : null;
+  return auth;
 }
 
-async function saveCredentials(client, credentialsPath, tokenPath) {
+async function saveCredentials(client, credentialsPath, tokenPath, scopes) {
   const keys = JSON.parse(await fsp.readFile(credentialsPath, "utf8"));
   const definition = credentialDefinition(keys);
   if (!client.credentials?.refresh_token) {
@@ -216,6 +232,7 @@ async function saveCredentials(client, credentialsPath, tokenPath) {
     client_id: definition.client_id,
     client_secret: definition.client_secret,
     refresh_token: client.credentials.refresh_token,
+    gwbScopes: scopes,
   };
   await writeTokenPayload(tokenPath, payload);
 }
@@ -227,13 +244,20 @@ export async function authorizeInteractive(credentialsPath, tokenPath, projects 
   };
   await validateCredentialsFile(credentialsPath);
   throwIfCancelled();
-  const scopes = mode === "publish" ? PUBLISH_SCOPES : SCOPES;
   // Desktop OAuth needs a new explicit consent; do not silently switch accounts.
   let previousEmail = null;
-  if (mode === "publish") {
+  let previousScopes = [];
+  if (mode !== "backup") {
     const previous = await testConnection(credentialsPath, tokenPath, []);
     previousEmail = previous.user.emailAddress;
+    const previousAuth = await loadAuth(credentialsPath, tokenPath);
+    previousScopes = previousAuth.gwbScopes;
+    if (!previousScopes) {
+      const access = await previousAuth.getAccessToken();
+      previousScopes = (await previousAuth.getTokenInfo(access.token)).scopes || [];
+    }
   }
+  const scopes = authorizationScopes(mode, previousScopes);
   const keys = JSON.parse(await fsp.readFile(credentialsPath, "utf8")).installed;
   const client = await authenticateDesktop({ keys, scopes, signal, onUrl });
   throwIfCancelled();
@@ -247,7 +271,7 @@ export async function authorizeInteractive(credentialsPath, tokenPath, projects 
   }
   throwIfCancelled();
   try {
-    await saveCredentials(client, credentialsPath, tokenPath);
+    await saveCredentials(client, credentialsPath, tokenPath, scopes);
     throwIfCancelled();
     const result = await testConnection(credentialsPath, tokenPath, projects);
     throwIfCancelled();
