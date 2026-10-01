@@ -15,6 +15,7 @@
     </div>
     <div class="top-actions">
       <span id="globalStatus" class="status neutral">Caricamento…</span>
+      <button id="checkUpdatesButton" class="button ghost" type="button">Controlla aggiornamenti</button>
       <button id="shutdownButton" class="button ghost" type="button">Chiudi programma</button>
     </div>
   </header>
@@ -25,6 +26,7 @@
     <button class="step" data-page="backup" type="button"><span>3</span><b>Backup</b></button>
     <button class="step" data-page="ai" type="button"><span>4</span><b>Modifiche AI</b></button>
     <button class="step" data-page="results" type="button"><span>5</span><b>Risultati</b></button>
+    <button class="step" data-page="diagnostics" type="button"><span>6</span><b>Trigger ed esecuzioni</b></button>
   </nav>
 
   <main>
@@ -263,6 +265,32 @@
         <p>I risultati compariranno qui dopo la prima esecuzione.</p>
       </div>
     </section>
+    <section id="page-diagnostics" class="page">
+      <div class="page-heading"><div><h2>Trigger ed esecuzioni</h2><p>Scarica lo storico e prepara modifiche ai trigger del progetto scelto.</p></div><button id="enableDiagnosticsButton" class="button secondary" type="button">Abilita diagnostica</button></div>
+      <div class="card diagnostic-controls">
+        <label>Progetto <select id="diagnosticProject"></select></label>
+        <label>Periodo <select id="diagnosticDays"><option value="1">Ultime 24 ore</option><option value="7" selected>Ultimi 7 giorni</option><option value="30">Ultimi 30 giorni</option></select></label>
+        <label class="check"><input id="includeCloudLogs" type="checkbox"> Includi log Cloud e dettagli errori</label>
+        <label>ID progetto Cloud dello script <input id="diagnosticCloudId" type="text" placeholder="Facoltativo, per i log"></label>
+        <label>Chiave script nei log <input id="diagnosticCloudKey" type="text" placeholder="Script ID; cambia se project_key è diverso"></label>
+        <button id="collectDiagnosticsButton" class="button primary" type="button">Raccogli esecuzioni</button>
+      </div>
+      <p class="setup-hint">L’API restituisce stato e durata. I dettagli degli errori richiedono Cloud Logging API abilitata, un progetto Cloud standard dello script e permessi di lettura dei log. I file possono contenere dati personali o segreti scritti nei log: controllali prima di condividerli.</p>
+      <div id="diagnosticResult" class="card" hidden>
+        <p id="diagnosticSummary" role="status"></p><a id="diagnosticDownload" class="button primary">Scarica ZIP diagnostica</a>
+        <pre id="diagnosticWarnings" class="diagnostic-output"></pre>
+        <div class="table-wrap"><table class="diagnostic-table"><thead><tr><th>Funzione</th><th>Esecuzioni</th><th>Errori</th><th>Timeout</th><th>Max secondi</th><th>Avvii fuori fascia</th></tr></thead><tbody id="diagnosticFunctionsBody"></tbody></table></div>
+        <details><summary>Esecuzioni raccolte, prime 200</summary><div class="table-wrap"><table class="diagnostic-table"><thead><tr><th>Funzione</th><th>Stato</th><th>Tipo</th><th>Inizio</th><th>Durata</th></tr></thead><tbody id="diagnosticRunsBody"></tbody></table></div></details>
+      </div>
+      <div class="page-heading"><div><h2>Piano trigger</h2><p>Crea, sostituisci o rimuovi i trigger orari delle sole funzioni scelte. Gli altri trigger restano presenti.</p></div><button id="loadTriggerFunctionsButton" class="button secondary" type="button">Leggi funzioni</button></div>
+      <div class="card">
+        <p>Google non crea trigger tramite API. Il programma pubblica il piano; per applicarlo apri Apps Script ed esegui <b>gwbApplyTriggerPlan</b>. Opera sui trigger del tuo account. Gli orari giornalieri e settimanali possono variare di circa 15 minuti. Le regole vengono applicate una alla volta: dopo un errore rilancia la stessa funzione per completare il piano.</p>
+        <div class="link-row"><button id="addTriggerRowButton" class="button secondary" type="button" disabled>Aggiungi regola</button><button id="nightTriggerPresetButton" class="button secondary" type="button" disabled>Preset notturno gestionale</button><button id="prepareTriggerPlanButton" class="button primary" type="button" disabled>Prepara anteprima</button></div>
+        <div class="table-wrap"><table class="trigger-table"><thead><tr><th>Funzione</th><th>Azione</th><th>Frequenza</th><th>Ora / intervallo</th><th>Giorno</th><th></th></tr></thead><tbody id="triggerRowsBody"></tbody></table></div>
+        <div id="triggerPlanPreview" hidden><p id="triggerPlanSummary"></p><div class="link-row"><button id="downloadTriggerSourceButton" class="button secondary" type="button">Scarica GWB_Triggers.gs</button><button id="publishTriggerPlanButton" class="button primary" type="button">Pubblica piano su Google</button><a id="openTriggerEditor" class="button secondary" target="_blank" rel="noreferrer" hidden>Apri Apps Script</a></div><p id="triggerPlanStatus" role="status"></p><details><summary>Codice del piano</summary><pre id="triggerPlanSource" class="diagnostic-output"></pre></details></div>
+        <details><summary>Verifica i trigger effettivamente installati</summary><p>Dopo la pubblicazione, esegui <b>gwbExportTriggers</b> in Apps Script. Incolla qui il JSON del log. Gli orari dei trigger creati da altri installer non sono esposti da Google.</p><textarea id="triggerInventoryInput" rows="5" aria-label="JSON inventario trigger"></textarea><button id="readTriggerInventoryButton" class="button secondary" type="button">Leggi inventario</button><pre id="triggerInventoryOutput" class="diagnostic-output"></pre></details>
+      </div>
+    </section>
   </main>
 
   <dialog id="privacyDialog" class="privacy-dialog">
@@ -300,5 +328,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="/app.js"></script>
+  <script src="/diagnostics.js"></script>
 </body>
 </html>

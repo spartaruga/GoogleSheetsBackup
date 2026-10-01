@@ -2,13 +2,24 @@ name: Windows build
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish a Release after all checks pass
+        type: boolean
+        default: false
   push:
+    branches:
+      - main
     tags:
       - "v*"
   pull_request:
 
 permissions:
   contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -63,7 +74,8 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          choco install innosetup --yes --no-progress
+          $inno = (Get-Content scripts/runtime.json -Raw | ConvertFrom-Json).innoVersion
+          choco install innosetup --version=$inno --yes --no-progress
 
           if ($LASTEXITCODE) {
             exit $LASTEXITCODE
@@ -95,3 +107,22 @@ jobs:
           name: GoogleWorkspaceBackup-release
           path: release/*
           if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: GoogleWorkspaceBackup-release
+          path: release
+      - name: Publish verified installer and source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: node scripts/publish-release.mjs

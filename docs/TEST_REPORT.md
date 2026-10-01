@@ -1,4 +1,14 @@
-# Verifiche della versione 3.3.1
+# Verifiche
+
+## Versione 3.4.0 — 2026-10-01
+
+- Node v24.19.0 Linux: self-test, 33 test, controllo repository e audit npm superati.
+- I nuovi test verificano permessi opzionali e mantenimento dello scope scrittura, paginazione, esportazione ZIP/CSV, errori di autorizzazione e log mancanti, confini Europe/Rome, piani trigger riprendibili, conservazione degli altri trigger e protezioni dei sorgenti.
+- La pipeline Windows compila il Setup e prova installazione, avvio senza Node globale, nuova interfaccia inclusa, reinstallazione e conservazione dei dati, disinstallazione.
+- Nessuna chiamata autenticata a Google reale, nessuna modifica dei trigger dell’utente e nessun token reale usato nei test. Il consenso, la raccolta reale e l’applicazione dei trigger vanno verificati con un progetto di prova.
+- La Release automatica verifica gli asset e li pubblica dopo la riuscita del job Windows. Non dichiara collaudato il login Google reale.
+
+## Archivio: versione 3.3.1
 
 ## Eseguite in questo ambiente
 

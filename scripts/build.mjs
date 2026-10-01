@@ -24,7 +24,7 @@ fs.rmSync(extracted, { recursive: true, force: true });
 powershell(`$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath ${psQuote(archive)} -DestinationPath ${psQuote(extracted)}`);
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(app, { recursive: true });
-for (const name of ['package.json', 'package-lock.json', 'engine.mjs', 'server.mjs', 'oauth.mjs', 'browser.mjs', 'instance.mjs', 'public']) {
+for (const name of ['package.json', 'package-lock.json', 'engine.mjs', 'server.mjs', 'oauth.mjs', 'browser.mjs', 'instance.mjs', 'diagnostics.mjs', 'triggers.mjs', 'updates.mjs', 'public']) {
   fs.cpSync(path.join(root, name), path.join(app, name), { recursive: true });
 }
 // Install from the lock in an empty app directory, never copy the developer profile.

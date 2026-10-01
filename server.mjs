@@ -1,6 +1,9 @@
 import http from "node:http";
 import { claimInstance } from "./instance.mjs";
 import { openBrowser } from "./browser.mjs";
+import { collectDiagnostics, saveDiagnosticReport } from "./diagnostics.mjs";
+import { readScriptProject, prepareTriggerPlan } from "./triggers.mjs";
+import { checkUpdates } from "./updates.mjs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -53,6 +56,14 @@ let requestBusy = false;
 let authBusy = false;
 let authAttempt = null;
 let shuttingDown = false;
+const diagnosticExports = new Map();
+const triggerPlans = new Map();
+
+function selectedScriptProject(id) {
+  const project = state.projects.find(p => String(p.id) === String(id));
+  if (!project?.scriptId) throw new Error('Scegli un progetto con Script ID.');
+  return project;
+}
 
 async function fileExists(filePath) {
   try { await fsp.access(filePath); return true; } catch { return false; }
@@ -696,6 +707,7 @@ const STATIC_FILES = new Map([
   ["/index.html", ["index.html", "text/html; charset=utf-8"]],
   ["/app.js", ["app.js", "text/javascript; charset=utf-8"]],
   ["/style.css", ["style.css", "text/css; charset=utf-8"]],
+  ["/diagnostics.js", ["diagnostics.js", "text/javascript; charset=utf-8"]],
 ]);
 
 async function serveStatic(response, pathname) {
@@ -718,6 +730,46 @@ async function serveStatic(response, pathname) {
 async function handleApi(request, response, pathname) {
   if (pathname === "/api/health" && request.method === "GET") return sendJson(response, 200, { ok: true, app: "GoogleWorkspaceBackup", version: APP_VERSION, instanceId: instance.id, busy: requestBusy || activeJob?.status === "running" });
   if (pathname === "/api/state" && request.method === "GET") return sendJson(response, 200, await publicState());
+  if (pathname === "/api/updates" && request.method === "GET") return sendJson(response, 200, await checkUpdates(APP_VERSION));
+  if (pathname.startsWith('/api/diagnostics/export/') && request.method === 'GET') {
+    const file = diagnosticExports.get(pathname.slice('/api/diagnostics/export/'.length));
+    if (!file) return sendJson(response, 404, {error:'Esportazione scaduta. Raccogli nuovamente la diagnostica.'});
+    const bytes = await fsp.readFile(file);
+    response.writeHead(200, {'Content-Type':'application/zip','Content-Length':bytes.length,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Disposition':`attachment; filename="diagnostica.zip"; filename*=UTF-8''${encodeURIComponent(path.basename(file))}`});
+    response.end(bytes);return;
+  }
+  if (pathname === '/api/diagnostics' && request.method === 'POST') {
+    const payload = await readJson(request);
+    const report = await collectDiagnostics({project:selectedScriptProject(payload.projectId),credentialsPath:CREDENTIALS_PATH,tokenPath:TOKEN_PATH,
+      days:payload.days,includeLogs:payload.includeLogs===true,cloudProjectId:String(payload.cloudProjectId||'').trim(),cloudScriptKey:String(payload.cloudScriptKey||'').trim()});
+    const saved = await saveDiagnosticReport(report, state.outputDir);
+    const id = crypto.randomUUID();diagnosticExports.set(id,saved.zipPath);
+    if(diagnosticExports.size>10) diagnosticExports.delete(diagnosticExports.keys().next().value);
+    return sendJson(response,200,{report,...saved,downloadUrl:'/api/diagnostics/export/'+id});
+  }
+  if (pathname === '/api/triggers/functions' && request.method === 'POST') {
+    const payload=await readJson(request), project=selectedScriptProject(payload.projectId);
+    const result=await readScriptProject({project,credentialsPath:CREDENTIALS_PATH,tokenPath:TOKEN_PATH});
+    return sendJson(response,200,{functions:result.functions,scriptId:project.scriptId,editorUrl:'https://script.google.com/home/projects/'+project.scriptId+'/edit'});
+  }
+  if (pathname === '/api/triggers/prepare' && request.method === 'POST') {
+    const payload=await readJson(request),project=selectedScriptProject(payload.projectId);
+    const result=await prepareTriggerPlan({project,rows:payload.rows,credentialsPath:CREDENTIALS_PATH,tokenPath:TOKEN_PATH,directory:path.join(DATA_DIR,'trigger-plans')});
+    result.digest=await appsScriptDirectoryDigest({sourceDirectory:result.sourceDirectory,baselineDirectory:result.baselineDirectory,protectedFiles:project.protectedFiles||[]});
+    triggerPlans.set(result.id,result);
+    if(triggerPlans.size>10) triggerPlans.delete(triggerPlans.keys().next().value);
+    return sendJson(response,200,{id:result.id,plan:result.plan,source:result.source,changedFiles:result.changedFiles,safetyBackupDirectory:result.baselineDirectory});
+  }
+  if (pathname === '/api/triggers/publish' && request.method === 'POST') {
+    const payload=await readJson(request),plan=triggerPlans.get(String(payload.planId||''));
+    if(!plan) throw new Error('Anteprima scaduta. Prepara nuovamente il piano.');
+    const project=selectedScriptProject(plan.projectId);
+    if(project.scriptId!==plan.scriptId) throw new Error('Il progetto è cambiato dopo la preparazione.');
+    const digest=await appsScriptDirectoryDigest({sourceDirectory:plan.sourceDirectory,baselineDirectory:plan.baselineDirectory,protectedFiles:project.protectedFiles||[]});
+    if(digest!==plan.digest) throw new Error('Il piano locale è stato modificato. Prepara una nuova anteprima.');
+    const publication=await publishAppsScriptProject({project,sourceDirectory:plan.sourceDirectory,baselineDirectory:plan.baselineDirectory,credentialsPath:CREDENTIALS_PATH,tokenPath:TOKEN_PATH});
+    return sendJson(response,200,{publication,safetyBackupDirectory:plan.baselineDirectory,applied:false,editorUrl:'https://script.google.com/home/projects/'+project.scriptId+'/edit',message:'Codice del piano pubblicato. I trigger non sono ancora cambiati: esegui gwbApplyTriggerPlan dall’editor Apps Script.'});
+  }
   if (pathname === "/api/state" && request.method === "POST") {
     await saveProjects(await readJson(request));
     return sendJson(response, 200, await publicState());
@@ -740,7 +792,7 @@ async function handleApi(request, response, pathname) {
   }
   if (pathname === "/api/auth" && request.method === "POST") {
     const payload = await readJson(request);
-    if (payload.mode && !["backup", "publish"].includes(payload.mode)) throw new Error("Modalità accesso non valida.");
+    if (payload.mode && !["backup", "publish", "diagnostics"].includes(payload.mode)) throw new Error("Modalità accesso non valida.");
     if (authBusy) return sendJson(response, 409, { error: "Un collegamento Google è già in corso." });
     const attempt = {
       id: crypto.randomUUID(),
