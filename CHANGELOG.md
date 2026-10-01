@@ -21,7 +21,7 @@
 
 ### Verifiche
 
-- 33 test automatici locali superati; API Google e trigger simulati, senza credenziali reali.
+- 36 test automatici locali superati; API Google e trigger simulati, senza credenziali reali. Collaudo Windows dell’installer e dell’interfaccia superato.
 - Corrette due versioni transitive di brace-expansion segnalate dal controllo npm.
 - Installer non firmato digitalmente. Configurazione OAuth e autorizzazione Google iniziale restano necessarie.
 
