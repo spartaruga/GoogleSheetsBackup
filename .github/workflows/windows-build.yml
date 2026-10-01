@@ -74,12 +74,18 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          $inno = (Get-Content scripts/runtime.json -Raw | ConvertFrom-Json).innoVersion
-          choco install innosetup --version=$inno --yes --no-progress
-
-          if ($LASTEXITCODE) {
-            exit $LASTEXITCODE
-          }
+          $runtime = Get-Content scripts/runtime.json -Raw | ConvertFrom-Json
+          $expectedUrl = "https://github.com/jrsoftware/issrc/releases/download/is-$($runtime.innoVersion.Replace('.', '_'))/innosetup-$($runtime.innoVersion).exe"
+          if ($runtime.innoUrl -ne $expectedUrl -or $runtime.innoSha256 -notmatch '^[a-f0-9]{64}$') { throw 'Invalid Inno Setup pin' }
+          $setup = Join-Path $env:RUNNER_TEMP 'inno-setup.exe'
+          $directory = Join-Path $env:RUNNER_TEMP 'Inno Setup compiler'
+          Invoke-WebRequest $runtime.innoUrl -OutFile $setup
+          if ((Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant() -ne $runtime.innoSha256) { throw 'Inno Setup checksum mismatch' }
+          $process = Start-Process $setup -ArgumentList ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="' + $directory + '"') -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Inno Setup install failed: $($process.ExitCode)" }
+          $compiler = Join-Path $directory 'ISCC.exe'
+          if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler missing' }
+          "ISCC_PATH=$compiler" >> $env:GITHUB_ENV
 
       - name: Build and package
         shell: pwsh

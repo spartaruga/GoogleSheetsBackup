@@ -2,5 +2,7 @@
   "version": "24.20.0",
   "archive": "node-v24.20.0-win-x64.zip",
   "sha256": "6cac9ffbca8f6a47091e4b5c772e0606049c3871cb67d900c0cedde630e545ba",
-  "innoVersion": "6.7.3"
+  "innoVersion": "6.7.3",
+  "innoUrl": "https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe",
+  "innoSha256": "9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732"
 }

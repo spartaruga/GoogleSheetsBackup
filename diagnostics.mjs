@@ -35,7 +35,7 @@ function seconds(duration) {
 }
 
 export function summarizeProcesses(processes) {
-  const functions = {};
+  const functions = Object.create(null);
   for (const run of processes) {
     const name = run.functionName || '(senza nome)';
     const row = functions[name] ||= { functionName: name, runs: 0, failed: 0, timedOut: 0, delayed: 0, slow: 0, maxSeconds: 0, totalSeconds: 0, automaticOutsideNight: 0 };

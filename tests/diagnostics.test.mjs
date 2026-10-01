@@ -33,6 +33,8 @@ test('summary counts failures, quota delays and Rome day/night boundaries', () =
   ];
   const result = summarizeProcesses(rows);
   assert.equal(result[0].timedOut,1);assert.equal(result[0].failed,1);assert.equal(result[0].delayed,1);assert.equal(result[0].slow,1);assert.equal(result[0].automaticOutsideNight,2);assert.equal(result[1].automaticOutsideNight,0);
+  const reserved = summarizeProcesses(['constructor','__proto__','toString'].map(functionName=>({functionName,duration:'1s',processStatus:'FAILED'})));
+  assert.equal(reserved.length,3);assert(reserved.every(row=>row.runs===1 && row.failed===1));
 });
 test('CSV output escapes formulas and retains quoted error fields', () => {
   const result = csvProcesses([{functionName:'=HYPERLINK("test")',processStatus:'FAILED'}]);

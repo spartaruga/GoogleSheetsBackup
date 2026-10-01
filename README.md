@@ -177,7 +177,7 @@ Risultati:
 - File `.sha256` accanto all'installer.
 - `release/GoogleWorkspaceBackup_vX.Y.Z_source.zip`: sorgente selezionato e controllato.
 
-La build scarica il runtime ufficiale e verifica uno SHA-256 fissato nel progetto; usa `npm ci` e il lockfile. Non importa `node_modules` dal PC di sviluppo. La directory `dist` viene ricreata: non usarla per dati personali. L'installer controlla che `dist` corrisponda al manifesto della build. Se Inno è in un'altra cartella, imposta `$env:ISCC_PATH` al percorso completo di `ISCC.exe`.
+La build scarica il runtime ufficiale e verifica uno SHA-256 fissato nel progetto; usa `npm ci` e il lockfile. Il workflow scarica anche Inno Setup dalla Release ufficiale e ne verifica lo SHA-256, senza dipendere dal catalogo Chocolatey. Non importa `node_modules` dal PC di sviluppo. La directory `dist` viene ricreata: non usarla per dati personali. L'installer controlla che `dist` corrisponda al manifesto della build. Se Inno è in un'altra cartella, imposta `$env:ISCC_PATH` al percorso completo di `ISCC.exe`.
 
 Per provare solo il sorgente: dopo `npm ci --ignore-scripts`, esegui `npm start` o `Avvia.vbs`. Solo in questa modalità il launcher può usare Node globale; non installa componenti al primo avvio.
 
