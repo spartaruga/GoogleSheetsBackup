@@ -14,7 +14,8 @@ async function fixture(t,{published=false,tagCommit=null,corrupt=false}={}) {
   const calls=[];
   const gh=(args,allowNotFound)=>{
     calls.push(args);
-    if(args[0]==='api' && args[1].includes('/commits/')){assert(allowNotFound);return tagCommit;}
+    if(args[0]==='api' && args[1].includes('/git/ref/tags/')){assert(allowNotFound);return tagCommit?JSON.stringify({object:{sha:tagCommit,type:'commit'}}):null;}
+    if(args[0]==='api' && args[1].includes('/commits/')){assert(!allowNotFound);assert(tagCommit);return tagCommit;}
     if(args[0]==='api' && args.includes('--slurp'))return JSON.stringify([[release]]);
     if(args[0]==='api' && args[1].endsWith('/42'))return JSON.stringify(release);
     if(args[0]==='release' && args[1]==='upload'){release.assets=structuredClone(assets);if(corrupt)release.assets[0].digest='sha256:wrong';return '';}
@@ -27,6 +28,7 @@ test('release resumes an unpublished draft without querying its unavailable by-t
   const f=await fixture(t);assert(publishRelease({repository,commit,...f}).endsWith('/'+tag));
   assert.equal(f.release.target_commitish,commit);assert.equal(f.release.draft,false);assert.equal(f.release.assets.length,4);
   assert(!f.calls.some(args=>args.some(arg=>arg.includes('/releases/tags/'))));
+  assert(!f.calls.some(args=>args.some(arg=>arg.includes('/commits/'))));
 });
 test('release keeps a published version unchanged and rejects a conflicting commit',async t=>{
   const f=await fixture(t,{published:true,tagCommit:commit});publishRelease({repository,commit,...f});

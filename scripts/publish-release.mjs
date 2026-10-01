@@ -18,17 +18,23 @@ const endpoint = `repos/${repository}/releases`;
 // The by-tag REST endpoint can return 404 for a draft. Locate drafts in the
 // authenticated list, then use their numeric ID throughout asset verification.
 const findRelease = () => JSON.parse(gh(['api', endpoint+'?per_page=100', '--paginate', '--slurp'])).flat().find(r=>r.tag_name===tag);
-const tagCommit = gh(['api', `repos/${repository}/commits/${tag}`, '--jq', '.sha'], true)?.trim();
+// An absent Git ref returns 404; commits/<missing-tag> can return 422 instead.
+const tagRef = gh(['api', `repos/${repository}/git/ref/tags/${tag}`], true);
+const tagCommit = tagRef ? gh(['api', `repos/${repository}/commits/${tag}`, '--jq', '.sha']).trim() : null;
 if(tagCommit && tagCommit!==commit) throw new Error('Questa versione appartiene a un altro commit. Incrementa package.json prima di pubblicare.');
 let release = findRelease();
 if(release && !release.draft && !tagCommit) throw new Error('Release pubblicata senza tag verificabile.');
-if (!release) {
+function writeNotes() {
   const changelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
   const section = changelog.split(`## ${pkg.version} —`)[1];
   if (!section) throw new Error('Note della versione mancanti nel changelog.');
   const notes = section.split('\n').slice(1).join('\n').split('\n## ')[0].trim();
   const notesPath = path.join(directory, 'release-notes.md');
   fs.writeFileSync(notesPath, notes + '\n');
+  return notesPath;
+}
+if (!release) {
+  const notesPath=writeNotes();
   gh(['release', 'create', tag, '--repo', repository, '--target', commit, '--draft', '--title', `Google Workspace Backup ${pkg.version}`, '--notes-file', notesPath]);
   release = findRelease();
   if(!release) throw new Error('Bozza appena creata non disponibile. Rilancia il workflow.');
@@ -36,7 +42,7 @@ if (!release) {
 if (release.draft) {
   // Only an unpublished draft without a conflicting tag may change its target.
   // Published Releases and existing tags are never retargeted or overwritten.
-  if(release.target_commitish!==commit) gh(['release','edit',tag,'--repo',repository,'--target',commit]);
+  gh(['release','edit',tag,'--repo',repository,'--target',commit,'--title',`Google Workspace Backup ${pkg.version}`,'--notes-file',writeNotes()]);
   gh(['release', 'upload', tag, '--repo', repository, '--clobber', ...assets.map(name => path.join(directory, name))]);
   release = JSON.parse(gh(['api', endpoint+'/'+release.id]));
 }
