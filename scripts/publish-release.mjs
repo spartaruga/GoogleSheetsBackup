@@ -33,25 +33,39 @@ function writeNotes() {
   fs.writeFileSync(notesPath, notes + '\n');
   return notesPath;
 }
-if (!release) {
-  const notesPath=writeNotes();
-  gh(['release', 'create', tag, '--repo', repository, '--target', commit, '--draft', '--title', `Google Workspace Backup ${pkg.version}`, '--notes-file', notesPath]);
-  release = findRelease();
-  if(!release) throw new Error('Bozza appena creata non disponibile. Rilancia il workflow.');
+function writeRelease(method, url, body) {
+  const requestPath=path.join(directory,'release-request.json');
+  fs.writeFileSync(requestPath,JSON.stringify(body));
+  return JSON.parse(gh(['api',url,'--method',method,'--header','Content-Type: application/json','--input',requestPath]));
 }
+const metadata = () => ({target_commitish:commit,name:`Google Workspace Backup ${pkg.version}`,body:fs.readFileSync(writeNotes(),'utf8')});
+if (!release) {
+  // Use the creation response: a new draft may not appear in the list yet.
+  release=writeRelease('POST',endpoint,{tag_name:tag,...metadata(),draft:true});
+}
+if(!Number.isSafeInteger(release.id) || release.id<=0 || release.tag_name!==tag) throw new Error('Risposta Release non valida.');
+const releaseEndpoint=endpoint+'/'+release.id;
 if (release.draft) {
   // Only an unpublished draft without a conflicting tag may change its target.
   // Published Releases and existing tags are never retargeted or overwritten.
-  gh(['release','edit',tag,'--repo',repository,'--target',commit,'--title',`Google Workspace Backup ${pkg.version}`,'--notes-file',writeNotes()]);
-  gh(['release', 'upload', tag, '--repo', repository, '--clobber', ...assets.map(name => path.join(directory, name))]);
-  release = JSON.parse(gh(['api', endpoint+'/'+release.id]));
+  release=writeRelease('PATCH',releaseEndpoint,metadata());
+  const uploadBase=release.upload_url?.split('{')[0];
+  if(uploadBase!==`https://uploads.github.com/repos/${repository}/releases/${release.id}/assets`) throw new Error('URL upload Release non valido.');
+  for(const name of assets) {
+    const existing=release.assets.find(a=>a.name===name);
+    if(existing) gh(['api',endpoint+'/assets/'+existing.id,'--method','DELETE']);
+    const upload=uploadBase+'?name='+encodeURIComponent(name);
+    const file=path.join(directory,name);
+    gh(['api',upload,'--method','POST','--header','Content-Type: application/octet-stream','--header','Content-Length: '+fs.statSync(file).size,'--input',file]);
+  }
+  release = JSON.parse(gh(['api', releaseEndpoint]));
 }
 for (const name of assets) {
   const asset = release.assets.find(a => a.name === name);
   const file = path.join(directory, name);
   if (!asset || asset.state !== 'uploaded' || asset.size !== fs.statSync(file).size || (asset.digest && asset.digest !== 'sha256:' + checksum(file))) throw new Error('Asset incompleto o diverso: ' + name);
 }
-if (release.draft) gh(['release', 'edit', tag, '--repo', repository, '--draft=false', '--latest']);
+if (release.draft) writeRelease('PATCH',releaseEndpoint,{draft:false,make_latest:'true'});
 return `https://github.com/${repository}/releases/tag/${tag}`;
 }
 
