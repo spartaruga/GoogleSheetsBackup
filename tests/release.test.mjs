@@ -6,7 +6,7 @@ import { publishRelease } from '../scripts/publish-release.mjs';
 import { pkg, checksum, writeChecksum } from '../scripts/common.mjs';
 import { temporary } from './helpers.mjs';
 const repository='spartaruga/GoogleSheetsBackup',commit='a'.repeat(40),tag='v'+pkg.version;
-async function fixture(t,{published=false,tagCommit=null,corrupt=false,fresh=false,stale=false}={}) {
+async function fixture(t,{published=false,tagCommit=null,corrupt=false,fresh=false,stale=false,wrongTag=false}={}) {
   const directory=await temporary(t),files=[`GoogleWorkspaceBackup-Setup-${pkg.version}.exe`,`GoogleWorkspaceBackup_v${pkg.version}_source.zip`];
   for(const name of files){fs.writeFileSync(path.join(directory,name),'fixture');writeChecksum(path.join(directory,name));}
   const assets=files.flatMap(name=>[name,name+'.sha256']).map((name,index)=>({id:100+index,name,state:'uploaded',size:fs.statSync(path.join(directory,name)).size,digest:'sha256:'+checksum(path.join(directory,name))}));
@@ -35,11 +35,12 @@ async function fixture(t,{published=false,tagCommit=null,corrupt=false,fresh=fal
     if(args[0]==='api' && (method==='POST'||method==='PATCH')) {
       assert(args.includes('Content-Type: application/json'));
       const body=JSON.parse(fs.readFileSync(args[args.indexOf('--input')+1],'utf8'));
+      assert.equal(body.tag_name,tag);
       if(method==='POST'){assert(fresh);assert(args[1].endsWith('/releases'));assert.equal(body.tag_name,tag);assert.equal(body.draft,true);}
       else assert(args[1].endsWith('/42'));
       if(body.draft===false){assert.equal(body.make_latest,'true');release.draft=false;}
       else {assert.equal(body.target_commitish,commit);assert.equal(body.name,'Google Workspace Backup '+pkg.version);assert(body.body.trim());release.target_commitish=body.target_commitish;}
-      return JSON.stringify(release);
+      return JSON.stringify(wrongTag && body.draft===false?{...release,tag_name:'untagged-test'}:release);
     }
     if(args[0]==='api' && method==='GET' && args[1].endsWith('/42'))return JSON.stringify(release);
     throw new Error('Chiamata inattesa: '+JSON.stringify(args));
@@ -71,4 +72,7 @@ test('release replaces incomplete draft assets before checking and publishing',a
   const f=await fixture(t,{stale:true});publishRelease({repository,commit,...f});
   assert.equal(f.calls.filter(args=>args.includes('DELETE')).length,4);
   assert.equal(f.release.draft,false);assert.equal(f.release.assets.length,4);
+});
+test('release does not report success when GitHub publishes under an unexpected tag',async t=>{
+  const f=await fixture(t,{wrongTag:true});assert.throws(()=>publishRelease({repository,commit,...f}),/Tag o stato della Release pubblicata/);
 });

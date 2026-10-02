@@ -38,10 +38,10 @@ function writeRelease(method, url, body) {
   fs.writeFileSync(requestPath,JSON.stringify(body));
   return JSON.parse(gh(['api',url,'--method',method,'--header','Content-Type: application/json','--input',requestPath]));
 }
-const metadata = () => ({target_commitish:commit,name:`Google Workspace Backup ${pkg.version}`,body:fs.readFileSync(writeNotes(),'utf8')});
+const metadata = () => ({tag_name:tag,target_commitish:commit,name:`Google Workspace Backup ${pkg.version}`,body:fs.readFileSync(writeNotes(),'utf8')});
 if (!release) {
   // Use the creation response: a new draft may not appear in the list yet.
-  release=writeRelease('POST',endpoint,{tag_name:tag,...metadata(),draft:true});
+  release=writeRelease('POST',endpoint,{...metadata(),draft:true});
 }
 if(!Number.isSafeInteger(release.id) || release.id<=0 || release.tag_name!==tag) throw new Error('Risposta Release non valida.');
 const releaseEndpoint=endpoint+'/'+release.id;
@@ -49,6 +49,7 @@ if (release.draft) {
   // Only an unpublished draft without a conflicting tag may change its target.
   // Published Releases and existing tags are never retargeted or overwritten.
   release=writeRelease('PATCH',releaseEndpoint,metadata());
+  if(release.tag_name!==tag || release.draft!==true) throw new Error('Tag o stato della bozza non valido.');
   const uploadBase=release.upload_url?.split('{')[0];
   if(uploadBase!==`https://uploads.github.com/repos/${repository}/releases/${release.id}/assets`) throw new Error('URL upload Release non valido.');
   for(const name of assets) {
@@ -65,7 +66,8 @@ for (const name of assets) {
   const file = path.join(directory, name);
   if (!asset || asset.state !== 'uploaded' || asset.size !== fs.statSync(file).size || (asset.digest && asset.digest !== 'sha256:' + checksum(file))) throw new Error('Asset incompleto o diverso: ' + name);
 }
-if (release.draft) writeRelease('PATCH',releaseEndpoint,{draft:false,make_latest:'true'});
+if (release.draft) release=writeRelease('PATCH',releaseEndpoint,{tag_name:tag,draft:false,make_latest:'true'});
+if(release.tag_name!==tag || release.draft!==false) throw new Error('Tag o stato della Release pubblicata non valido.');
 return `https://github.com/${repository}/releases/tag/${tag}`;
 }
 
