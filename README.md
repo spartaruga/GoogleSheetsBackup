@@ -86,19 +86,19 @@ Nella pagina **Backup** scegli **Includi esecuzioni Apps Script nello ZIP** e/o 
 
 L’accesso Google, gli ID e la destinazione restano nel profilo durante l’aggiornamento: chiudi il programma e installa il nuovo Setup. Non serve riconfigurare i progetti. I permessi per leggere le esecuzioni si abilitano una volta con **Abilita diagnostica**.
 
-Per i dettagli Cloud, configura il progetto una volta in **Trigger ed esecuzioni → Salva impostazioni del progetto**. La raccolta manuale salva anche queste impostazioni. Ogni progetto conserva il proprio ID Cloud e la propria chiave script. I token riconoscibili nei file diagnostici vengono censurati nella copia ZIP per l’AI; controlla comunque i log prima di condividere dati personali.
+Per i dettagli Cloud, apri **Backup → Impostazioni esecuzioni e trigger → Salva impostazioni del progetto**. Ogni progetto conserva il proprio ID Cloud e la propria chiave script. I token riconoscibili nei file diagnostici vengono censurati nella copia ZIP per l’AI; controlla comunque i log prima di condividere dati personali.
 
 Per i trigger, esegui `gwbExportTriggers` nell’editor Apps Script e usa **Salva inventario** una volta. Il programma riutilizza quel JSON nei successivi ZIP, con la data originale e `live: false`; se modifichi i trigger, salva un inventario aggiornato. Un inventario assente o un errore di autorizzazione delle esecuzioni produce un avviso nello ZIP, senza eliminare il normale backup. Cambiare lo Script ID del progetto azzera le impostazioni diagnostiche e l’inventario associati al vecchio script.
 
-## Trigger ed esecuzioni
+Al termine di un backup completato il programma apre **Modifiche AI**, per caricare il file delle modifiche. **Risultati** resta disponibile dal menu. Errori e annullamenti lasciano aperto il Backup con il log.
 
-1. Apri **Trigger ed esecuzioni**, scegli un progetto con Script ID e premi **Abilita diagnostica**. Il nuovo consenso mantiene i permessi di pubblicazione già concessi.
-2. Scegli 1, 7 o 30 giorni e premi **Raccogli esecuzioni**.
-3. Scarica lo ZIP: contiene `esecuzioni.json`, `esecuzioni.csv` e un riepilogo. Una copia resta nella destinazione dei backup.
+## Impostazioni e gestione trigger nel Backup
 
-La tabella mostra errori, timeout, durate e avvii automatici fuori 20:00–08:30 italiane. Il controllo frequente delle formule può essere un’eccezione intenzionale. Lo storico API non contiene il testo dell’errore: per quello seleziona **Includi log Cloud**, inserisci l’ID del progetto Cloud **dello script** e abilita Cloud Logging API. Serve un progetto Cloud standard e accesso ai suoi log. Se `script.googleapis.com/project_key` nei log è diverso dallo Script ID, inserisci quella chiave nell’apposito campo. Log mancanti o parziali vengono segnalati; non significano assenza di errori. Versioni e deployment disponibili vengono inclusi nel JSON.
+Apri **Impostazioni esecuzioni e trigger** nel Backup, scegli un progetto con Script ID e premi **Abilita diagnostica** una volta. Il nuovo consenso mantiene i permessi di pubblicazione già concessi. Seleziona le esecuzioni nelle opzioni del backup e scegli 1, 7 o 30 giorni: JSON, CSV e riepilogo vengono inclusi nello stesso ZIP. Non occorre una raccolta separata.
 
-**Piano trigger:** premi **Leggi funzioni**, aggiungi le regole e prepara l’anteprima. Puoi scaricare `GWB_Triggers.gs` oppure pubblicarlo con il permesso Apps Script già usato per le Modifiche AI. Il programma salva prima una copia integrale dei sorgenti correnti e blocca conflitti e file intoccabili. Poi apri l’editor Google ed esegui **`gwbApplyTriggerPlan`**, autorizzando il servizio trigger se richiesto.
+Il riepilogo riporta errori, timeout, durate e avvii automatici fuori 20:00–08:30 italiane. Il controllo frequente delle formule può essere un’eccezione intenzionale. Lo storico API non contiene il testo dell’errore: per quello seleziona **Includi log Cloud**, inserisci l’ID del progetto Cloud **dello script**, salva le impostazioni e abilita Cloud Logging API. Serve un progetto Cloud standard e accesso ai suoi log. Se `script.googleapis.com/project_key` nei log è diverso dallo Script ID, inserisci quella chiave nell’apposito campo. Log mancanti o parziali vengono segnalati; non significano assenza di errori. Versioni e deployment disponibili vengono inclusi nel JSON.
+
+**Piano trigger:** nello stesso riquadro apri **Modifica i trigger del progetto**, premi **Leggi funzioni**, aggiungi le regole e prepara l’anteprima. Puoi scaricare `GWB_Triggers.gs` oppure pubblicarlo con il permesso Apps Script già usato per le Modifiche AI. Il programma salva prima una copia integrale dei sorgenti correnti e blocca conflitti e file intoccabili. Poi apri l’editor Google ed esegui **`gwbApplyTriggerPlan`**, autorizzando il servizio trigger se richiesto.
 
 Le regole sostituiscono/rimuovono solo i trigger CLOCK degli handler elencati e dell’account che esegue la funzione. Gli altri trigger restano presenti. Il piano viene applicato una regola alla volta: se una regola fallisce, quelle precedenti possono essere già applicate. Rilancia **lo stesso piano** per completarlo. Se la quota è già piena, Google può impedire anche una singola sostituzione: rimuovi una regola non necessaria prima di crearne una nuova. Gli orari sono approssimativi, ±15 minuti.
 
@@ -191,7 +191,7 @@ La build scarica il runtime ufficiale e verifica uno SHA-256 fissato nel progett
 
 Per provare solo il sorgente: dopo `npm ci --ignore-scripts`, esegui `npm start` o `Avvia.vbs`. Solo in questa modalità il launcher può usare Node globale; non installa componenti al primo avvio.
 
-**Senza preparare un PC di build:** il workflow **Windows build** compila e prova il Setup. Le PR producono solo un artefatto. Un push su `main` o un tag `vX.Y.Z` pubblica la Release dopo tutti i controlli. Da **Run workflow** puoi scegliere se pubblicare o produrre solo l’artefatto `GoogleWorkspaceBackup-release`.
+**Senza preparare un PC di build:** il workflow **Windows build** compila e prova il Setup soltanto quando cambia `package.json` su `main`, normalmente al rilascio di una nuova versione. PR, commit ordinari e creazione dei tag non avviano Actions. Da **Run workflow** puoi scegliere se pubblicare o produrre solo l’artefatto `GoogleWorkspaceBackup-release`. Gli artefatti temporanei durano 3 giorni; EXE, sorgenti e checksum finali restano nelle Release. La cache npm è mantenuta e gli archivi già compressi non vengono ricompressi durante l’upload.
 
 ## Pubblica su GitHub e crea una Release
 
@@ -210,12 +210,14 @@ git commit -m "Prepare Windows distribution"
 
 4. Aggiungi come `origin` l'URL del tuo repository usando il comando mostrato da GitHub e fai `git push -u origin main`.
 5. Abilita Secret Scanning/push protection dove disponibili e Private vulnerability reporting nelle impostazioni del repository.
-6. Avvia **Actions → Windows build**. Leggi l'esito: non distribuire build con test falliti.
-7. Scarica l'artefatto del workflow e prova il Setup su una VM Windows senza Node, usando un progetto Google di prova.
-8. Incrementa la versione in `package.json` e lockfile, aggiungi le note in `CHANGELOG.md` e integra la modifica su `main`.
+6. Raggruppa le modifiche e completa i controlli locali prima di preparare la release.
+7. Incrementa la versione in `package.json` e lockfile, aggiungi le note in `CHANGELOG.md` e integra la modifica su `main`: parte un solo workflow Windows.
+8. Leggi l'esito; non distribuire build con test falliti. Per un collaudo Google reale usa una VM Windows e un progetto di prova. Per riprendere una pubblicazione fallita rilancia solo il job Release, riutilizzando l’installer già verificato.
 9. Il job Release crea il tag sul commit verificato, allega EXE/ZIP e checksum, controlla dimensioni e digest e pubblica la Release. Non sovrascrive una versione appartenente a un altro commit. Il login Google reale resta un controllo da fare con il tuo account e un progetto di prova.
 
-In alternativa crea e invia un tag `vX.Y.Z`: il workflow verifica che corrisponda a `package.json`, compila, prova e pubblica. [Guida ufficiale GitHub alle Release](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository).
+Per un avvio esplicito usa **Actions → Windows build → Run workflow**. Il job Release crea il tag: non occorre inviarne uno per ricompilare il programma. [Guida ufficiale GitHub alle Release](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository).
+
+Le indicazioni pertinenti di [Awesome Copilot](https://github.com/github/awesome-copilot) sono raccolte in `.github/copilot-instructions.md`: modifiche piccole, test locali, una build per release, dati non attendibili trattati come dati e protezione dei segreti. Le guide complete non vengono copiate nel progetto né aggiungono servizi AI al programma.
 
 Per la prossima versione usa `npm version patch --no-git-tag-version`, aggiorna il changelog e ripeti i controlli. La versione eseguibile deriva da `package.json`; i riferimenti storici nella documentazione restano storici.
 

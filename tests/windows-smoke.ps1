@@ -69,7 +69,7 @@ foreach ($module in @('diagnostics.mjs','triggers.mjs','updates.mjs')) {
     if (-not (Test-Path (Join-Path $install "app\$module"))) { throw "Modulo non incluso nel Setup: $module" }
 }
 $diagnosticUi = Invoke-WebRequest "$($app.Url)/diagnostics.js" -UseBasicParsing
-if ($diagnosticUi.StatusCode -ne 200 -or $diagnosticUi.Content -notmatch 'collectDiagnosticsButton') { throw 'Interfaccia diagnostica non disponibile nel Setup.' }
+if ($diagnosticUi.StatusCode -ne 200 -or $diagnosticUi.Content -notmatch 'saveDiagnosticSettingsButton') { throw 'Impostazioni diagnostiche non disponibili nel Setup.' }
 node tests/windows-ui.mjs $app.Url
 if ($LASTEXITCODE) { throw 'Test browser della nuova interfaccia fallito.' }
 $duplicate = Start-Process (Join-Path $install 'GoogleWorkspaceBackup.exe') -PassThru
@@ -80,8 +80,8 @@ Stop-App $app
 # Exercise an actual upgrade from the previous public Release on this disposable runner.
 $currentSetup = $setup
 $previousSetup = Join-Path $env:RUNNER_TEMP 'GWB previous Setup.exe'
-Invoke-WebRequest 'https://github.com/spartaruga/GoogleSheetsBackup/releases/download/v3.4.0/GoogleWorkspaceBackup-Setup-3.4.0.exe' -OutFile $previousSetup -UseBasicParsing
-if ((Get-FileHash $previousSetup -Algorithm SHA256).Hash.ToLowerInvariant() -ne '9c194e0d0f03ce3248094ff2472f46889c8105d1489b024708e066c22d27a6e0') { throw 'Checksum della Release precedente non valido.' }
+Invoke-WebRequest 'https://github.com/spartaruga/GoogleSheetsBackup/releases/download/v3.4.2/GoogleWorkspaceBackup-Setup-3.4.2.exe' -OutFile $previousSetup -UseBasicParsing
+if ((Get-FileHash $previousSetup -Algorithm SHA256).Hash.ToLowerInvariant() -ne '0dae479febc889e620d56e4808b3758ae15848bc1e713bc2c06fc82be2f7bb71') { throw 'Checksum della Release precedente non valido.' }
 $setup = $previousSetup
 Install-App
 # Synthetic schema-v3 profile compatible with the original source version.
@@ -104,7 +104,7 @@ $paths = @($stateFile, $credentialFile, $tokenFile, (Join-Path $backup 'keep.txt
 $before = @($paths | ForEach-Object { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash })
 $oldApp = Start-App
 $oldState = Invoke-RestMethod "$($oldApp.Url)/api/state"
-if ($oldState.appVersion -ne '3.4.0' -or $oldState.projects[0].scriptId -ne $scriptId) { throw 'Il test non ha avviato la Release precedente con il profilo salvato.' }
+if ($oldState.appVersion -ne '3.4.2' -or $oldState.projects[0].scriptId -ne $scriptId) { throw 'Il test non ha avviato la Release precedente con il profilo salvato.' }
 Stop-App $oldApp
 $setup = $currentSetup
 Install-App
@@ -118,4 +118,4 @@ if ($uninstaller.ExitCode -ne 0) { throw 'Disinstallazione fallita.' }
 if (Test-Path (Join-Path $install 'GoogleWorkspaceBackup.exe')) { throw 'Il programma non e stato rimosso.' }
 $after = @($paths | ForEach-Object { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash })
 if (($before -join ',') -ne ($after -join ',')) { throw 'Dati utente modificati da installazione/disinstallazione.' }
-Write-Host "WINDOWS SMOKE OK: avvio senza Node globale, seconda istanza, upgrade reale 3.4.0 -> $version e disinstallazione con dati conservati."
+Write-Host "WINDOWS SMOKE OK: avvio senza Node globale, seconda istanza, upgrade reale 3.4.2 -> $version e disinstallazione con dati conservati."

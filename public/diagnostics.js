@@ -23,9 +23,7 @@
     loadedProjectKey=`${$('diagnosticProject').value}:${project?.scriptId || ''}`;
     functions = []; scriptId = project?.scriptId || ''; invalidatePlan();
     $('triggerRowsBody').replaceChildren(); $('triggerInventoryOutput').textContent = '';
-    $('diagnosticResult').hidden = true;
     const settings=project?.diagnosticSettings || {};
-    $('diagnosticDays').value=String(settings.days || 7);
     $('includeCloudLogs').checked=settings.includeLogs===true;
     $('diagnosticCloudId').value=settings.cloudProjectId || '';
     $('diagnosticCloudKey').value=settings.cloudScriptKey || '';
@@ -34,7 +32,7 @@
     for (const id of ['addTriggerRowButton', 'nightTriggerPresetButton', 'prepareTriggerPlanButton']) $(id).disabled = true;
   }
   function settingsPayload() {
-    return {projectId:projectId(),days:Number($('diagnosticDays').value),includeLogs:$('includeCloudLogs').checked,cloudProjectId:$('diagnosticCloudId').value.trim(),cloudScriptKey:$('diagnosticCloudKey').value.trim()};
+    return {projectId:projectId(),days:Number($('executionDays').value),includeLogs:$('includeCloudLogs').checked,cloudProjectId:$('diagnosticCloudId').value.trim(),cloudScriptKey:$('diagnosticCloudKey').value.trim()};
   }
   function renderInventory(data) {
     $('triggerInventoryOutput').textContent='Rilevato il '+new Date(data.exportedAt).toLocaleString('it-IT')+' · copia salvata\n'+(data.triggers.map(t=>`${t.handler} · ${t.eventType} · ${t.id} · ${t.schedule?JSON.stringify(t.schedule):'orario non esposto da Google'}`).join('\n') || 'Nessun trigger per l’account che ha eseguito l’esportazione.');
@@ -43,11 +41,6 @@
     const text = button.textContent; button.disabled = true; button.textContent = 'Attendi…';
     try { await fn(); } catch (error) { showToast(error.message, true); }
     finally { button.disabled = false; button.textContent = text; }
-  }
-  function cells(values) {
-    const row = document.createElement('tr');
-    for (const value of values) { const td = document.createElement('td'); td.textContent = String(value ?? ''); row.append(td); }
-    return row;
   }
   function downloadText(name, content) {
     const url = URL.createObjectURL(new Blob([content], {type:'text/plain;charset=utf-8'}));
@@ -100,20 +93,6 @@
     const result = await api('/api/updates');
     if (!result.available) return showToast(result.message || `Versione ${result.currentVersion} aggiornata.`);
     if (window.confirm(`Disponibile versione ${result.latestVersion}. Aprire la Release ufficiale per scaricare l’installer?`)) window.open(result.releaseUrl, '_blank', 'noopener,noreferrer');
-  }));
-  $('collectDiagnosticsButton').addEventListener('click', event => busy(event.currentTarget, async () => {
-    const selected = projectId();
-    const payload=settingsPayload();
-    const result = await api('/api/diagnostics', {method:'POST',body:JSON.stringify(payload)});
-    if(knownProjects.has(selected)) knownProjects.get(selected).diagnosticSettings=payload;
-    if(selected!==projectId()) throw new Error('Il progetto selezionato è cambiato. Diagnostica salvata per il progetto precedente.');
-    const report = result.report;
-    $('diagnosticSummary').textContent = `${report.executions.items.length} esecuzioni raccolte${report.executions.truncated?' (elenco parziale)':''}. Salvate in ${result.directory}`;
-    $('diagnosticDownload').href = result.downloadUrl;
-    $('diagnosticWarnings').textContent = [...report.warnings, ...report.limitations].join('\n');
-    $('diagnosticFunctionsBody').replaceChildren(...report.summary.map(r => cells([r.functionName,r.runs,r.failed,r.timedOut,r.maxSeconds,r.automaticOutsideNight])));
-    $('diagnosticRunsBody').replaceChildren(...report.executions.items.slice(0,200).map(r => cells([r.functionName,r.processStatus,r.processType,new Date(r.startTime).toLocaleString('it-IT',{timeZone:'Europe/Rome'}),r.duration])));
-    $('diagnosticResult').hidden = false; showToast('Diagnostica salvata. Controlla gli avvisi.');
   }));
   $('loadTriggerFunctionsButton').addEventListener('click', event => busy(event.currentTarget, async () => {
     const selected = projectId();

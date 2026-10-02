@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.4.3 — 2026-10-02
+
+- Eliminata la sesta pagina «Trigger ed esecuzioni» e la raccolta diagnostica separata. Le impostazioni Cloud, l’inventario e il piano trigger sono nelle opzioni del Backup; esecuzioni e trigger restano selezionabili nello stesso ZIP.
+- Dopo un backup completato si apre «Modifiche AI». Errori e annullamenti restano nel Backup; «Risultati» si apre dal menu.
+- Actions limitate ai cambiamenti di `package.json` su `main` per le nuove versioni e agli avvii manuali. Nessuna build automatica su PR, commit ordinari o tag. Cache npm mantenuta, artefatti temporanei per 3 giorni e upload senza ricompressione.
+- Aggiunte istruzioni Copilot brevi, basate sui principi pertinenti di Awesome Copilot e della guida di sicurezza fornita. Nessun servizio AI o dipendenza aggiunto al programma.
+- Il test browser verifica le cinque sezioni, le impostazioni nel Backup e la navigazione dopo successo, errori parziali, errore e annullamento. Il collaudo installer prova l’upgrade reale dalla 3.4.2 e la conservazione dei dati.
+
 ## 3.4.2 — 2026-10-02
 
 - Mantiene le opzioni ZIP e le impostazioni persistenti della 3.4.1: ID esistenti, esecuzioni e inventario trigger salvato riutilizzabili senza reinserirli.

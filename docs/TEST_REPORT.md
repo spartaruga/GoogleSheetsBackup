@@ -1,5 +1,14 @@
 # Verifiche
 
+## Versione 3.4.3 — 2026-10-02
+
+- 43 test Node, self-test, controllo repository, sintassi JavaScript e `git diff --check` superati localmente. Verificati struttura HTML, ID unici, assenza di riferimenti JS a campi rimossi e filtri/retention del workflow.
+- Le modifiche riguardano UI e percorso di pubblicazione; backend, formato del profilo e raccolta del backup restano compatibili.
+- Il test browser Windows controlla cinque sezioni, assenza della pagina e della raccolta diagnostica duplicate, impostazioni e inventario nel Backup, piano trigger, arrivo in Modifiche AI dopo successo o errori parziali e permanenza nel Backup dopo errore o annullamento. Risultati resta raggiungibile manualmente; il layout viene verificato anche a 390 px.
+- Il collaudo installer ora scarica la Release 3.4.2 con SHA-256 fissato e verifica l’upgrade alla nuova versione, conservando profilo, credenziali, token e backup tramite confronto degli hash.
+- La pipeline Windows si avvia soltanto per `package.json` su `main` o su richiesta manuale. PR e commit ordinari non compilano installer; gli artefatti temporanei hanno durata 3 giorni. Il collaudo Windows va verificato nel workflow di release prima di distribuire il pacchetto.
+- API Google simulate e profili fittizi nei test. Nessun consenso Google reale è collaudato da queste verifiche.
+
 ## Versione 3.4.2 — 2026-10-02
 
 - 43 test locali, self-test e controllo repository superati. Il nuovo caso verifica che una risposta di pubblicazione con un tag inatteso non venga dichiarata riuscita.

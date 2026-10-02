@@ -659,7 +659,7 @@ async function pollJob() {
     if (job.status === "error") showToast(job.error || "Backup non riuscito.", true);
     if (job.status === "cancelled") showToast("Backup annullato; le copie parziali sono state eliminate.");
     await refreshState();
-    if (["completed", "completed_with_errors"].includes(job.status)) switchPage("results");
+    if (["completed", "completed_with_errors"].includes(job.status)) switchPage("ai");
   } catch (error) {
     ui.progressWrap.hidden = true;
     ui.cancelBackupButton.hidden = true;

@@ -14,6 +14,7 @@ const profile = await fsp.mkdtemp(path.join(os.tmpdir(), 'gwb-ui-'));
 const child = spawn(browserPath, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=0', '--user-data-dir=' + profile, 'about:blank'], {windowsHide:true,stdio:'ignore'});
 let socket, nextId = 0;
 const pending = new Map(), errors = [];
+let jobStatus = 'completed';
 let resolvePageLoaded;
 const mockState={version:3,appVersion:JSON.parse(fs.readFileSync(new URL('../package.json',import.meta.url),'utf8')).version,nodeVersion:process.version,options:{xlsx:true,zip:true},projects:[{id:'demo',name:'Progetto test',scriptId:'1234567890'.repeat(2),diagnosticSettings:{cloudProjectId:'demo-cloud',days:7}},{id:'peer',name:'Altro progetto',scriptId:'9876543210'.repeat(2),diagnosticSettings:{cloudProjectId:'other-cloud',days:1}}],history:[],outputDir:'Cartella test',accessChecks:[]};
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -56,7 +57,8 @@ try {
       else if(route==='/api/triggers/inventory') {const payload=JSON.parse(message.params.request.postData);mockState.projects.find(p=>p.id===payload.projectId).triggerInventory=payload.inventory;result={inventory:payload.inventory};}
       else if(route==='/api/triggers/functions') result={functions,scriptId:'1234567890'.repeat(2),editorUrl:'https://example.invalid'};
       else if(route==='/api/triggers/prepare') {const rows=JSON.parse(message.params.request.postData).rows;result={id:'demo-plan',plan:rows,source:'function gwbApplyTriggerPlan() {}',changedFiles:['apps-script/GWB_Triggers.gs'],safetyBackupDirectory:'Cartella test'};}
-      else if(route==='/api/diagnostics') result={directory:'Cartella test',downloadUrl:'/mock.zip',report:{executions:{items:[{functionName:'sync',processStatus:'TIMED_OUT',duration:'360s',startTime:'2026-10-01T20:00:00Z'}]},summary:[{functionName:'sync',runs:1,timedOut:1,failed:0,maxSeconds:360}],warnings:['Avviso test'],limitations:['API simulate']}};
+      else if(route==='/api/ui-test-job') {jobStatus=JSON.parse(message.params.request.postData).status;result={};}
+      else if(route==='/api/job') result={status:jobStatus,progress:100,logs:[],error:'Errore simulato'};
       else result={};
       try {await send('Fetch.fulfillRequest',{requestId:message.params.requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'application/json'}],body:Buffer.from(JSON.stringify(result)).toString('base64')},message.sessionId);}catch(error){errors.push(error.message);}
     }
@@ -77,7 +79,10 @@ try {
     await wait(()=>document.querySelector('#diagnosticProject option') && document.querySelectorAll('#projectsBody tr').length===2);
     document.querySelector('#executionOption').checked=true;document.querySelector('#triggerOption').checked=true;document.querySelector('#executionDays').value='30';
     await saveSettings(false);
-    document.querySelector('[data-page="diagnostics"]').click();
+    if(document.querySelectorAll('.step').length!==5 || document.querySelector('#page-diagnostics') || document.querySelector('#collectDiagnosticsButton'))throw new Error('Sezione diagnostica duplicata ancora presente');
+    document.querySelector('[data-page="backup"]').click();
+    document.querySelector('#backupDiagnosticsDetails').open=true;
+    if(document.querySelector('#diagnosticProject').closest('.page').id!=='page-backup')throw new Error('Impostazioni diagnostiche fuori dal Backup');
     document.querySelector('#diagnosticCloudId').value='main-cloud';
     document.querySelector('#saveDiagnosticSettingsButton').click();
     await wait(()=>!document.querySelector('#saveDiagnosticSettingsButton').disabled);
@@ -91,16 +96,23 @@ try {
     const saved=await api('/api/state');
     if(!saved.options.includeExecutions || !saved.options.includeTriggers || saved.options.executionDays!==30 || saved.projects[0].scriptId!=='1234567890'.repeat(2) || !saved.projects[0].triggerInventory)throw new Error('Scelte ZIP o ID non conservati');
     document.querySelector('#loadTriggerFunctionsButton').click();
+    document.querySelector('#triggerPlanDetails').open=true;
     await wait(()=>!document.querySelector('#nightTriggerPresetButton').disabled);
     document.querySelector('#nightTriggerPresetButton').click();
     if(document.querySelectorAll('#triggerRowsBody tr').length!==12)throw new Error('Preset non completo');
     document.querySelector('#prepareTriggerPlanButton').click();
     await wait(()=>!document.querySelector('#triggerPlanPreview').hidden);
-    document.querySelector('#collectDiagnosticsButton').click();
-    await wait(()=>!document.querySelector('#diagnosticResult').hidden);
-    if(document.querySelectorAll('#diagnosticRunsBody tr').length!==1)throw new Error('Diagnostica non visualizzata');
     const time=document.querySelector('.trigger-time');time.value='23:15';time.dispatchEvent(new Event('input',{bubbles:true}));
     if(!document.querySelector('#triggerPlanPreview').hidden)throw new Error('Anteprima obsoleta ancora attiva');
+    for(const status of ['completed','completed_with_errors','error','cancelled']) {
+      await api('/api/ui-test-job',{method:'POST',body:JSON.stringify({status})});
+      switchPage('backup');await pollJob();
+      const expected=['completed','completed_with_errors'].includes(status)?'page-ai':'page-backup';
+      if(document.querySelector('.page.active').id!==expected)throw new Error('Pagina errata dopo il backup: '+status);
+    }
+    document.querySelector('[data-page="results"]').click();
+    if(!document.querySelector('#page-results').classList.contains('active'))throw new Error('Risultati non raggiungibili manualmente');
+    switchPage('backup');
     return true;
   })()`;
   const result=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true},sessionId);
@@ -108,7 +120,7 @@ try {
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true},sessionId);
   const mobile=await send('Runtime.evaluate',{expression:'document.documentElement.scrollWidth <= innerWidth + 1',returnByValue:true},sessionId);
   if(!mobile.result.value) throw new Error('Overflow della pagina su schermo stretto.');
-  console.log('UI browser OK: impostazioni per progetto, scelte ZIP, inventario salvato, 12 regole, anteprima, diagnostica, invalidazione e schermo stretto. API Google simulate.');
+  console.log('UI browser OK: 5 sezioni, impostazioni nel Backup, scelte ZIP, inventario, 12 regole, navigazione dopo successo/errore/annullamento e schermo stretto. API Google simulate.');
 } finally {
   if(socket?.readyState===WebSocket.OPEN) {try{await send('Browser.close');}catch{}socket.close();}
   child.kill();await delay(500);await fsp.rm(profile,{recursive:true,force:true,maxRetries:5,retryDelay:200});
