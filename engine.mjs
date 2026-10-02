@@ -979,6 +979,16 @@ export async function createAiZip({ sourceDirectory, project, policies, protecte
       }
     }
 
+    // Logs are collected after the script review. Mask recognizable secrets
+    // in the AI copy while keeping the original diagnostics in the local backup.
+    for(const file of await listFiles(temporaryDirectory)) {
+      if(!file.relative.startsWith('diagnostics/') || !/\.(json|csv|md)$/.test(file.relative)) continue;
+      const result=redactSecrets(await fsp.readFile(file.fullPath,'utf8'));
+      if(result.findings.length) {
+        await fsp.writeFile(file.fullPath,result.text,'utf8');
+        redactions.push({path:file.relative,count:result.findings.length,types:[...new Set(result.findings.map(item=>item.type))]});
+      }
+    }
     const filesBeforeManifest = await listFiles(temporaryDirectory);
     const includedFiles = [];
     for (const file of filesBeforeManifest) {
@@ -1179,7 +1189,7 @@ async function uniqueVersionDirectory(projectDirectory, timestamp) {
   return candidate;
 }
 
-async function backupOne(auth, project, outputDir, options, filePolicies, emit, shouldCancel) {
+async function backupOne(auth, project, outputDir, options, filePolicies, emit, shouldCancel, collectExtras) {
   const sheets = google.sheets({ version: "v4", auth });
   const drive = google.drive({ version: "v3", auth });
   const scriptApi = google.script({ version: "v1", auth });
@@ -1288,6 +1298,12 @@ async function backupOne(auth, project, outputDir, options, filePolicies, emit, 
       emit("ok", `Apps Script salvato: ${info.appsScript.fileCount} file.`, 84);
     }
 
+    if(collectExtras && (options.includeExecutions || options.includeTriggers)) {
+      ensureNotCancelled(shouldCancel);
+      const warnings=await collectExtras({project,options,auth,api:scriptApi,directory:versionDirectory,emit,shouldCancel});
+      ensureNotCancelled(shouldCancel);
+      for(const warning of warnings) {info.warnings.push(warning);emit('warn',warning);}
+    }
     await writeJson(path.join(versionDirectory, "backup-info.json"), info);
     let finalZipPath = "";
     if (options.zip !== false) {
@@ -1346,6 +1362,7 @@ export async function backupProjects({
   tokenPath,
   options = {},
   filePolicies = {},
+  collectExtras,
   onEvent = () => {},
   shouldCancel = () => false,
 }) {
@@ -1366,7 +1383,7 @@ export async function backupProjects({
       const result = await backupOne(auth, project, outputDir, options, projectPolicies, (level, message, localProgress) => {
         const progress = Math.min(100, Math.round(((projectIndex + Number(localProgress || 0) / 100) / projects.length) * 100));
         onEvent({ level, message, project: label, progress });
-      }, shouldCancel);
+      }, shouldCancel, collectExtras);
       results.push({ status: "ok", projectId: String(project.id || ""), ...result });
       onEvent({ level: "ok", message: `Backup completato: ${label}`, project: label, progress: Math.round(((projectIndex + 1) / projects.length) * 100) });
     } catch (error) {

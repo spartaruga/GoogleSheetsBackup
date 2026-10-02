@@ -1,5 +1,13 @@
 # Verifiche
 
+## Versione 3.4.1 — 2026-10-02
+
+- Self-test, 40 test Node, controllo repository e audit npm superati in Linux. Nessuna chiamata Google autenticata nei test.
+- Verificati i quattro casi delle opzioni ZIP: nessun extra, sole esecuzioni, soli trigger, entrambi. Il contenuto viene letto da un lettore ZIP indipendente; i token fittizi nei log sono censurati solo nella copia AI.
+- Verificata la conservazione di ID Cloud, chiave script, inventario e scelte ZIP dopo salvataggio dei progetti e riavvio; cambiare Script ID elimina i dati diagnostici del vecchio progetto.
+- Verificati i casi di scope mancanti, inventario assente, configurazione Cloud incompleta e annullamento durante la paginazione. Il normale backup resta disponibile quando la diagnostica non è accessibile.
+- La pipeline Windows ora prova le impostazioni nell’interfaccia e l’upgrade reale dalla Release pubblica 3.4.0. Usa un profilo e token fittizi su runner usa e getta, confrontando gli hash dei dati dopo installazione e disinstallazione. Questo non collauda il consenso Google reale.
+
 ## Versione 3.4.0 — 2026-10-01
 
 - Node v24.19.0 Linux: self-test, 36 test, controllo repository e audit npm superati.

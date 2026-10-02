@@ -188,7 +188,11 @@
           <div class="option-row">
             <label class="check"><input id="xlsxOption" type="checkbox" checked><span>Crea anche copia Excel (.xlsx)</span></label>
             <label class="check"><input id="zipOption" type="checkbox" checked><span>Crea ZIP finale</span></label>
+            <label class="check"><input id="executionOption" type="checkbox"><span>Includi esecuzioni Apps Script nello ZIP</span></label>
+            <label class="check"><input id="triggerOption" type="checkbox"><span>Includi inventario trigger salvato nello ZIP</span></label>
+            <label>Periodo esecuzioni <select id="executionDays"><option value="1">Ultime 24 ore</option><option value="7" selected>Ultimi 7 giorni</option><option value="30">Ultimi 30 giorni</option></select></label>
           </div>
+          <p class="setup-hint">Usa gli ID già salvati. I dettagli Cloud seguono le impostazioni del progetto in «Trigger ed esecuzioni». I trigger sono la copia dell’ultimo inventario salvato, con la sua data. Le scelte restano memorizzate. Per le esecuzioni abilita la diagnostica una volta. I token riconoscibili nei log vengono censurati nella copia ZIP per l’AI.</p>
           <div id="backupSummary" class="summary-box"></div>
           <div class="privacy-note">
             <b>Controllo segreti obbligatorio</b>
@@ -273,6 +277,7 @@
         <label class="check"><input id="includeCloudLogs" type="checkbox"> Includi log Cloud e dettagli errori</label>
         <label>ID progetto Cloud dello script <input id="diagnosticCloudId" type="text" placeholder="Facoltativo, per i log"></label>
         <label>Chiave script nei log <input id="diagnosticCloudKey" type="text" placeholder="Script ID; cambia se project_key è diverso"></label>
+        <button id="saveDiagnosticSettingsButton" class="button secondary" type="button">Salva impostazioni del progetto</button>
         <button id="collectDiagnosticsButton" class="button primary" type="button">Raccogli esecuzioni</button>
       </div>
       <p class="setup-hint">L’API restituisce stato e durata. I dettagli degli errori richiedono Cloud Logging API abilitata, un progetto Cloud standard dello script e permessi di lettura dei log. I file possono contenere dati personali o segreti scritti nei log: controllali prima di condividerli.</p>
@@ -288,7 +293,7 @@
         <div class="link-row"><button id="addTriggerRowButton" class="button secondary" type="button" disabled>Aggiungi regola</button><button id="nightTriggerPresetButton" class="button secondary" type="button" disabled>Preset notturno gestionale</button><button id="prepareTriggerPlanButton" class="button primary" type="button" disabled>Prepara anteprima</button></div>
         <div class="table-wrap"><table class="trigger-table"><thead><tr><th>Funzione</th><th>Azione</th><th>Frequenza</th><th>Ora / intervallo</th><th>Giorno</th><th></th></tr></thead><tbody id="triggerRowsBody"></tbody></table></div>
         <div id="triggerPlanPreview" hidden><p id="triggerPlanSummary"></p><div class="link-row"><button id="downloadTriggerSourceButton" class="button secondary" type="button">Scarica GWB_Triggers.gs</button><button id="publishTriggerPlanButton" class="button primary" type="button">Pubblica piano su Google</button><a id="openTriggerEditor" class="button secondary" target="_blank" rel="noreferrer" hidden>Apri Apps Script</a></div><p id="triggerPlanStatus" role="status"></p><details><summary>Codice del piano</summary><pre id="triggerPlanSource" class="diagnostic-output"></pre></details></div>
-        <details><summary>Verifica i trigger effettivamente installati</summary><p>Dopo la pubblicazione, esegui <b>gwbExportTriggers</b> in Apps Script. Incolla qui il JSON del log. Gli orari dei trigger creati da altri installer non sono esposti da Google.</p><textarea id="triggerInventoryInput" rows="5" aria-label="JSON inventario trigger"></textarea><button id="readTriggerInventoryButton" class="button secondary" type="button">Leggi inventario</button><pre id="triggerInventoryOutput" class="diagnostic-output"></pre></details>
+        <details><summary>Inventario trigger salvato</summary><p>Esegui <b>gwbExportTriggers</b> in Apps Script e salva qui il JSON del log una volta. Verrà riutilizzato nei successivi ZIP; dopo una modifica dei trigger aggiorna l’inventario. Gli orari dei trigger creati da altri installer non sono esposti da Google.</p><textarea id="triggerInventoryInput" rows="5" aria-label="JSON inventario trigger"></textarea><button id="readTriggerInventoryButton" class="button secondary" type="button">Salva inventario</button><pre id="triggerInventoryOutput" class="diagnostic-output"></pre></details>
       </div>
     </section>
   </main>

@@ -2,6 +2,7 @@
 (() => {
   const $ = id => document.getElementById(id);
   let functions = [], scriptId = '', prepared = null, revision = 0;
+  let knownProjects = new Map(), loadedProjectKey = '';
   function invalidatePlan() { revision++; prepared = null; $('triggerPlanPreview').hidden = true; }
   function projectId() {
     const id = $('diagnosticProject').value;
@@ -11,15 +12,32 @@
   function projects(state) {
     const select = $('diagnosticProject'), previous = select.value;
     const rows = (state.projects || []).filter(p => p.scriptId);
+    knownProjects = new Map(rows.map(p=>[String(p.id),p]));
     select.replaceChildren(...rows.map(p => new Option(p.name, p.id)));
     if (rows.some(p => String(p.id) === previous)) select.value = previous;
-    if (select.value !== previous) resetProject();
+    const selected=knownProjects.get(select.value);
+    if(`${select.value}:${selected?.scriptId || ''}`!==loadedProjectKey) resetProject();
   }
   function resetProject() {
-    functions = []; scriptId = ''; invalidatePlan();
+    const project=knownProjects.get($('diagnosticProject').value);
+    loadedProjectKey=`${$('diagnosticProject').value}:${project?.scriptId || ''}`;
+    functions = []; scriptId = project?.scriptId || ''; invalidatePlan();
     $('triggerRowsBody').replaceChildren(); $('triggerInventoryOutput').textContent = '';
     $('diagnosticResult').hidden = true;
+    const settings=project?.diagnosticSettings || {};
+    $('diagnosticDays').value=String(settings.days || 7);
+    $('includeCloudLogs').checked=settings.includeLogs===true;
+    $('diagnosticCloudId').value=settings.cloudProjectId || '';
+    $('diagnosticCloudKey').value=settings.cloudScriptKey || '';
+    $('triggerInventoryInput').value=project?.triggerInventory?JSON.stringify(project.triggerInventory,null,2):'';
+    if(project?.triggerInventory) renderInventory(project.triggerInventory);
     for (const id of ['addTriggerRowButton', 'nightTriggerPresetButton', 'prepareTriggerPlanButton']) $(id).disabled = true;
+  }
+  function settingsPayload() {
+    return {projectId:projectId(),days:Number($('diagnosticDays').value),includeLogs:$('includeCloudLogs').checked,cloudProjectId:$('diagnosticCloudId').value.trim(),cloudScriptKey:$('diagnosticCloudKey').value.trim()};
+  }
+  function renderInventory(data) {
+    $('triggerInventoryOutput').textContent='Rilevato il '+new Date(data.exportedAt).toLocaleString('it-IT')+' · copia salvata\n'+(data.triggers.map(t=>`${t.handler} · ${t.eventType} · ${t.id} · ${t.schedule?JSON.stringify(t.schedule):'orario non esposto da Google'}`).join('\n') || 'Nessun trigger per l’account che ha eseguito l’esportazione.');
   }
   async function busy(button, fn) {
     const text = button.textContent; button.disabled = true; button.textContent = 'Attendi…';
@@ -72,6 +90,12 @@
   window.addEventListener('gwb-state', event => projects(event.detail));
   $('diagnosticProject').addEventListener('change', resetProject);
   $('enableDiagnosticsButton').addEventListener('click', () => accountAction('diagnostics'));
+  $('saveDiagnosticSettingsButton').addEventListener('click',event=>busy(event.currentTarget,async()=>{
+    const payload=settingsPayload();
+    const result=await api('/api/diagnostics/settings',{method:'POST',body:JSON.stringify(payload)});
+    if(knownProjects.has(payload.projectId)) knownProjects.get(payload.projectId).diagnosticSettings=result.settings;
+    showToast('Impostazioni del progetto salvate. Verranno riutilizzate nei prossimi ZIP.');
+  }));
   $('checkUpdatesButton').addEventListener('click', event => busy(event.currentTarget, async () => {
     const result = await api('/api/updates');
     if (!result.available) return showToast(result.message || `Versione ${result.currentVersion} aggiornata.`);
@@ -79,7 +103,9 @@
   }));
   $('collectDiagnosticsButton').addEventListener('click', event => busy(event.currentTarget, async () => {
     const selected = projectId();
-    const result = await api('/api/diagnostics', {method:'POST',body:JSON.stringify({projectId:selected,days:Number($('diagnosticDays').value),includeLogs:$('includeCloudLogs').checked,cloudProjectId:$('diagnosticCloudId').value.trim(),cloudScriptKey:$('diagnosticCloudKey').value.trim()})});
+    const payload=settingsPayload();
+    const result = await api('/api/diagnostics', {method:'POST',body:JSON.stringify(payload)});
+    if(knownProjects.has(selected)) knownProjects.get(selected).diagnosticSettings=payload;
     if(selected!==projectId()) throw new Error('Il progetto selezionato è cambiato. Diagnostica salvata per il progetto precedente.');
     const report = result.report;
     $('diagnosticSummary').textContent = `${report.executions.items.length} esecuzioni raccolte${report.executions.truncated?' (elenco parziale)':''}. Salvate in ${result.directory}`;
@@ -126,12 +152,13 @@
     const result = await api('/api/triggers/publish', {method:'POST',body:JSON.stringify({planId:prepared.id})});
     $('triggerPlanStatus').textContent = result.message; $('openTriggerEditor').href = result.editorUrl; $('openTriggerEditor').hidden = false;
   }));
-  $('readTriggerInventoryButton').addEventListener('click', () => {
-    try {
+  $('readTriggerInventoryButton').addEventListener('click', event => busy(event.currentTarget,async()=>{
+      const selected=projectId();
       const data = JSON.parse($('triggerInventoryInput').value);
-      if (data.scriptId !== scriptId || !Array.isArray(data.triggers) || data.triggers.length > 100) throw new Error('Inventario non valido o relativo a un altro progetto.');
-      $('triggerInventoryOutput').textContent = data.triggers.map(t => `${t.handler} · ${t.eventType} · ${t.id} · ${t.schedule?JSON.stringify(t.schedule):'orario non esposto da Google'}`).join('\n') || 'Nessun trigger per l’account che ha eseguito l’esportazione.';
-    } catch(error) {showToast(error.message,true);}
-  });
+      const result=await api('/api/triggers/inventory',{method:'POST',body:JSON.stringify({projectId:selected,inventory:data})});
+      if(knownProjects.has(selected)) knownProjects.get(selected).triggerInventory=result.inventory;
+      if(selected===projectId()) {$('triggerInventoryInput').value=JSON.stringify(result.inventory,null,2);renderInventory(result.inventory);}
+      showToast('Inventario salvato. Puoi includerlo nei successivi ZIP.');
+  }));
   api('/api/state').then(projects).catch(() => {});
 })();

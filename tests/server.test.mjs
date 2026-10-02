@@ -66,6 +66,27 @@ test('port collision, strict local requests, serialization, duplicate launch and
   await stop(next);
 });
 
+test('diagnostic fields, ZIP choices and trigger inventory survive project saves and restart; a new script clears its old data',async t=>{
+  const directory=await temporary(t),id='1234567890'.repeat(2),project={id:'demo',name:'Demo',scriptId:id};
+  let app=await start(t,directory);
+  const config={projects:[project],outputDir:path.join(directory,'output'),options:{includeExecutions:true,includeTriggers:true,executionDays:30}};
+  assert.equal((await app.call('/api/state',config)).status,200);
+  const settings={days:7,includeLogs:true,cloudProjectId:'demo-cloud',cloudScriptKey:id};
+  assert.equal((await app.call('/api/diagnostics/settings',{projectId:project.id,...settings})).status,200);
+  const inventory={scriptId:id,exportedAt:'2026-10-01T20:00:00Z',triggers:[{id:'clock-1',handler:'sync',eventType:'CLOCK'}]};
+  assert.equal((await app.call('/api/triggers/inventory',{projectId:project.id,inventory})).status,200);
+  assert.equal((await app.call('/api/triggers/inventory',{projectId:project.id,inventory:{...inventory,scriptId:'other'}})).status,400);
+  assert.equal((await app.call('/api/state',config)).status,200);
+  await stop(app);app=await start(t,directory);
+  const state=await (await app.call('/api/state')).json();
+  assert.equal(state.options.includeExecutions,true);assert.equal(state.options.includeTriggers,true);assert.equal(state.options.executionDays,30);
+  assert.deepEqual(state.projects[0].diagnosticSettings,settings);assert.equal(state.projects[0].triggerInventory.triggers[0].id,'clock-1');
+  assert.equal((await app.call('/api/state',{...config,projects:[{...project,scriptId:'9876543210'.repeat(2)}]})).status,200);
+  const changed=await (await app.call('/api/state')).json();
+  assert.equal(changed.projects[0].diagnosticSettings,undefined);assert.equal(changed.projects[0].triggerInventory,undefined);
+  await stop(app);
+});
+
 test('AI preview/apply respects protected files, hash and original backup', async t => {
   const directory = await temporary(t);
   const baseline = path.join(directory, 'backups', 'Demo', 'baseline');
