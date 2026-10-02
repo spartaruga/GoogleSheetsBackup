@@ -2,11 +2,12 @@
 
 ## Versione 3.4.1 — 2026-10-02
 
-- Self-test, 40 test Node, controllo repository e audit npm superati in Linux. Nessuna chiamata Google autenticata nei test.
+- Self-test, 42 test Node, controllo repository e audit npm superati in Linux. Nessuna chiamata Google autenticata nei test.
 - Verificati i quattro casi delle opzioni ZIP: nessun extra, sole esecuzioni, soli trigger, entrambi. Il contenuto viene letto da un lettore ZIP indipendente; i token fittizi nei log sono censurati solo nella copia AI.
 - Verificata la conservazione di ID Cloud, chiave script, inventario e scelte ZIP dopo salvataggio dei progetti e riavvio; cambiare Script ID elimina i dati diagnostici del vecchio progetto.
 - Verificati i casi di scope mancanti, inventario assente, configurazione Cloud incompleta e annullamento durante la paginazione. Il normale backup resta disponibile quando la diagnostica non è accessibile.
 - La pipeline Windows ora prova le impostazioni nell’interfaccia e l’upgrade reale dalla Release pubblica 3.4.0. Usa un profilo e token fittizi su runner usa e getta, confrontando gli hash dei dati dopo installazione e disinstallazione. Questo non collauda il consenso Google reale.
+- Il [collaudo Windows](https://github.com/spartaruga/GoogleSheetsBackup/actions/runs/37031878374) ha superato i 40 test del backup, la prova UI e l’upgrade reale 3.4.0 → 3.4.1. La pubblicazione iniziale si è fermata perché la bozza appena creata non era subito nell’elenco; due test aggiuntivi verificano la creazione usando direttamente l’ID restituito e la sostituzione degli asset incompleti della bozza, mantenendo il controllo dei checksum e dei conflitti con versioni pubblicate.
 
 ## Versione 3.4.0 — 2026-10-01
 
