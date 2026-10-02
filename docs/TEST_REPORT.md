@@ -6,7 +6,8 @@
 - Le modifiche riguardano UI e percorso di pubblicazione; backend, formato del profilo e raccolta del backup restano compatibili.
 - Il test browser Windows controlla cinque sezioni, assenza della pagina e della raccolta diagnostica duplicate, impostazioni e inventario nel Backup, piano trigger, arrivo in Modifiche AI dopo successo o errori parziali e permanenza nel Backup dopo errore o annullamento. Risultati resta raggiungibile manualmente; il layout viene verificato anche a 390 px.
 - Il collaudo installer ora scarica la Release 3.4.2 con SHA-256 fissato e verifica l’upgrade alla nuova versione, conservando profilo, credenziali, token e backup tramite confronto degli hash.
-- La pipeline Windows si avvia soltanto per `package.json` su `main` o su richiesta manuale. PR e commit ordinari non compilano installer; gli artefatti temporanei hanno durata 3 giorni. Il collaudo Windows va verificato nel workflow di release prima di distribuire il pacchetto.
+- La pipeline Windows si avvia soltanto per `package.json` su `main` o su richiesta manuale. PR e commit ordinari non compilano installer; gli artefatti temporanei hanno durata 3 giorni.
+- L’unico [workflow della Release 3.4.3](https://github.com/spartaruga/GoogleSheetsBackup/actions/runs/37043798531) ha superato 43 test Node, test browser Windows, installazione, upgrade reale 3.4.2 → 3.4.3 e disinstallazione con i dati conservati. La Release pubblica contiene installer, sorgenti e relativi checksum; tag e commit verificati: `a810781396a928d9577e0d9fcd0c0b2e0a9d3be4`.
 - API Google simulate e profili fittizi nei test. Nessun consenso Google reale è collaudato da queste verifiche.
 
 ## Versione 3.4.2 — 2026-10-02
