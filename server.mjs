@@ -1,7 +1,7 @@
 import http from "node:http";
 import { claimInstance } from "./instance.mjs";
 import { openBrowser } from "./browser.mjs";
-import { collectDiagnostics, saveDiagnosticReport } from "./diagnostics.mjs";
+import { collectDiagnostics, saveDiagnosticReport, diagnosticSettings, triggerInventory, collectBackupExtras } from "./diagnostics.mjs";
 import { readScriptProject, prepareTriggerPlan } from "./triggers.mjs";
 import { checkUpdates } from "./updates.mjs";
 import fsp from "node:fs/promises";
@@ -41,7 +41,7 @@ const DEFAULT_OUTPUT = path.join(os.homedir(), "Downloads", "GoogleWorkspaceBack
 const DEFAULT_STATE = {
   version: 3,
   outputDir: DEFAULT_OUTPUT,
-  options: { xlsx: true, zip: true },
+  options: { xlsx: true, zip: true, includeExecutions: false, includeTriggers: false, executionDays: 7 },
   projects: [],
   history: [],
   account: null,
@@ -174,9 +174,11 @@ async function saveProjects(payload) {
   const projects = payload.projects.map((project) => {
     const id = String(project.id || crypto.randomUUID());
     const previous = state.projects.find((item) => String(item.id) === id);
+    const clean=validateProject(project);
     return {
-      ...validateProject(project),
+      ...clean,
       id,
+      ...(previous?.scriptId===clean.scriptId ? {diagnosticSettings:previous.diagnosticSettings,triggerInventory:previous.triggerInventory} : {}),
       protectedFiles: Array.isArray(project.protectedFiles)
         ? [...new Set(project.protectedFiles.map(String))]
         : [...new Set((previous?.protectedFiles || []).map(String))],
@@ -184,11 +186,16 @@ async function saveProjects(payload) {
   });
   const outputDir = String(payload.outputDir || "").trim();
   if (!outputDir) throw new Error("La cartella di destinazione è obbligatoria.");
+  const executionDays=Number(payload.options?.executionDays ?? state.options.executionDays ?? 7);
+  if(![1,7,30].includes(executionDays)) throw new Error('Periodo esecuzioni non valido.');
   state.projects = projects;
   state.outputDir = path.resolve(outputDir);
   state.options = {
     xlsx: payload.options?.xlsx !== false,
     zip: payload.options?.zip !== false,
+    includeExecutions: payload.options?.includeExecutions===undefined ? state.options.includeExecutions===true : payload.options.includeExecutions===true,
+    includeTriggers: payload.options?.includeTriggers===undefined ? state.options.includeTriggers===true : payload.options.includeTriggers===true,
+    executionDays,
   };
   await saveState();
 }
@@ -245,6 +252,7 @@ async function startBackup(payload) {
         tokenPath: TOKEN_PATH,
         options: state.options,
         filePolicies,
+        collectExtras: collectBackupExtras,
         shouldCancel: () => job.cancelRequested,
         onEvent: (event) => {
           if (Number.isFinite(event.progress)) job.progress = Math.max(0, Math.min(100, event.progress));
@@ -740,12 +748,24 @@ async function handleApi(request, response, pathname) {
   }
   if (pathname === '/api/diagnostics' && request.method === 'POST') {
     const payload = await readJson(request);
-    const report = await collectDiagnostics({project:selectedScriptProject(payload.projectId),credentialsPath:CREDENTIALS_PATH,tokenPath:TOKEN_PATH,
-      days:payload.days,includeLogs:payload.includeLogs===true,cloudProjectId:String(payload.cloudProjectId||'').trim(),cloudScriptKey:String(payload.cloudScriptKey||'').trim()});
+    const project=selectedScriptProject(payload.projectId);
+    project.diagnosticSettings=diagnosticSettings(payload);
+    await saveState();
+    const report = await collectDiagnostics({project,credentialsPath:CREDENTIALS_PATH,tokenPath:TOKEN_PATH,...project.diagnosticSettings});
     const saved = await saveDiagnosticReport(report, state.outputDir);
     const id = crypto.randomUUID();diagnosticExports.set(id,saved.zipPath);
     if(diagnosticExports.size>10) diagnosticExports.delete(diagnosticExports.keys().next().value);
     return sendJson(response,200,{report,...saved,downloadUrl:'/api/diagnostics/export/'+id});
+  }
+  if(pathname==='/api/diagnostics/settings' && request.method==='POST') {
+    const payload=await readJson(request),project=selectedScriptProject(payload.projectId);
+    project.diagnosticSettings=diagnosticSettings(payload);await saveState();
+    return sendJson(response,200,{projectId:project.id,settings:project.diagnosticSettings});
+  }
+  if(pathname==='/api/triggers/inventory' && request.method==='POST') {
+    const payload=await readJson(request),project=selectedScriptProject(payload.projectId);
+    project.triggerInventory=triggerInventory(payload.inventory,project.scriptId);await saveState();
+    return sendJson(response,200,{projectId:project.id,inventory:project.triggerInventory});
   }
   if (pathname === '/api/triggers/functions' && request.method === 'POST') {
     const payload=await readJson(request), project=selectedScriptProject(payload.projectId);

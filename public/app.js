@@ -18,6 +18,9 @@ const ui = {
   outputDir: document.querySelector("#outputDir"),
   xlsxOption: document.querySelector("#xlsxOption"),
   zipOption: document.querySelector("#zipOption"),
+  executionOption: document.querySelector("#executionOption"),
+  triggerOption: document.querySelector("#triggerOption"),
+  executionDays: document.querySelector("#executionDays"),
   backupSummary: document.querySelector("#backupSummary"),
   runBackupButton: document.querySelector("#runBackupButton"),
   cancelBackupButton: document.querySelector("#cancelBackupButton"),
@@ -299,6 +302,9 @@ function renderState(state) {
   ui.outputDir.value = state.outputDir || "";
   ui.xlsxOption.checked = state.options?.xlsx !== false;
   ui.zipOption.checked = state.options?.zip !== false;
+  ui.executionOption.checked = state.options?.includeExecutions === true;
+  ui.triggerOption.checked = state.options?.includeTriggers === true;
+  ui.executionDays.value = String(state.options?.executionDays || 7);
   renderHistory(state.history || []);
 }
 
@@ -337,7 +343,7 @@ async function saveSettings(showConfirmation = true) {
   const payload = {
     projects: collectProjects(),
     outputDir: ui.outputDir.value.trim(),
-    options: { xlsx: ui.xlsxOption.checked, zip: ui.zipOption.checked },
+    options: { xlsx: ui.xlsxOption.checked, zip: ui.zipOption.checked, includeExecutions:ui.executionOption.checked, includeTriggers:ui.triggerOption.checked, executionDays:Number(ui.executionDays.value) },
   };
   const state = await api("/api/state", { method: "POST", body: JSON.stringify(payload) });
   currentState = state;

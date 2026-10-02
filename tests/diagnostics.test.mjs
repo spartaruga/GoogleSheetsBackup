@@ -64,3 +64,10 @@ test('diagnostic ranges reject malformed and excessive queries', () => {
   assert.throws(()=>diagnosticRange({days:365}));assert.throws(()=>diagnosticRange({startTime:'bad'}));
   assert.throws(()=>diagnosticRange({startTime:'2026-01-01',endTime:'2026-10-01'}));
 });
+test('missing Cloud setup preserves execution data and cancellation stops pagination',async()=>{
+  const report=await collectDiagnostics({project,includeLogs:true,api:{processes:{listScriptProcesses:async()=>({data:{processes:[{functionName:'sync'}]}})}}});
+  assert.equal(report.executions.items.length,1);assert(report.warnings.some(w=>w.includes('ID del progetto Cloud')));
+  let calls=0;
+  await assert.rejects(collectPages(async()=>{calls++;return {data:{rows:[1],nextPageToken:'next'}};},'rows',{shouldCancel:()=>calls>0}),{code:'BACKUP_CANCELLED'});
+  assert.equal(calls,1);
+});

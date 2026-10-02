@@ -77,11 +77,20 @@ if (-not $duplicate.WaitForExit(15000) -or $duplicate.ExitCode -ne 0) { throw 'S
 $after = Get-Content (Join-Path $GwbProfileDirectory 'instance.json') -Raw | ConvertFrom-Json
 if ($after.pid -ne $app.Record.pid) { throw 'Sono partite due istanze.' }
 Stop-App $app
+# Exercise an actual upgrade from the previous public Release on this disposable runner.
+$currentSetup = $setup
+$previousSetup = Join-Path $env:RUNNER_TEMP 'GWB previous Setup.exe'
+Invoke-WebRequest 'https://github.com/spartaruga/GoogleSheetsBackup/releases/download/v3.4.0/GoogleWorkspaceBackup-Setup-3.4.0.exe' -OutFile $previousSetup -UseBasicParsing
+if ((Get-FileHash $previousSetup -Algorithm SHA256).Hash.ToLowerInvariant() -ne '9c194e0d0f03ce3248094ff2472f46889c8105d1489b024708e066c22d27a6e0') { throw 'Checksum della Release precedente non valido.' }
+$setup = $previousSetup
+Install-App
 # Synthetic schema-v3 profile compatible with the original source version.
 $backup = Join-Path $env:RUNNER_TEMP 'GWB user backups'
 New-Item -ItemType Directory -Path $backup -Force | Out-Null
 'keep-backup' | Set-Content (Join-Path $backup 'keep.txt')
-@{version=3; outputDir=$backup; projects=@(); history=@(); options=@{xlsx=$true; zip=$true}; sentinel='keep'} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $GwbProfileDirectory 'state.json') -Encoding UTF8
+$scriptId = '1234567890' * 2
+$fixtureProject = @{id='demo'; name='Demo'; scriptId=$scriptId; diagnosticSettings=@{days=7; includeLogs=$true; cloudProjectId='demo-cloud'; cloudScriptKey=$scriptId}; triggerInventory=@{scriptId=$scriptId; exportedAt='2026-10-01T20:00:00Z'; triggers=@(@{id='clock-1'; handler='sync'; eventType='CLOCK'})}}
+@{version=3; outputDir=$backup; projects=@($fixtureProject); history=@(); options=@{xlsx=$true; zip=$true; includeExecutions=$true; includeTriggers=$true; executionDays=30}; sentinel='keep'} | ConvertTo-Json -Depth 10 | Set-Content (Join-Path $GwbProfileDirectory 'state.json') -Encoding UTF8
 # Node JSON readers require UTF-8 without BOM; PowerShell 5 writes BOM by default.
 $stateFile = Join-Path $GwbProfileDirectory 'state.json'
 [IO.File]::WriteAllText($stateFile, (Get-Content $stateFile -Raw), (New-Object Text.UTF8Encoding($false)))
@@ -93,14 +102,20 @@ $tokenFile = Join-Path $GwbProfileDirectory 'token.json'
 [IO.File]::WriteAllText($tokenFile, (@{format='gwb-dpapi-v1'; data=[Convert]::ToBase64String($protected)} | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
 $paths = @($stateFile, $credentialFile, $tokenFile, (Join-Path $backup 'keep.txt'))
 $before = @($paths | ForEach-Object { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash })
+$oldApp = Start-App
+$oldState = Invoke-RestMethod "$($oldApp.Url)/api/state"
+if ($oldState.appVersion -ne '3.4.0' -or $oldState.projects[0].scriptId -ne $scriptId) { throw 'Il test non ha avviato la Release precedente con il profilo salvato.' }
+Stop-App $oldApp
+$setup = $currentSetup
 Install-App
 $app = Start-App
 $state = Invoke-RestMethod "$($app.Url)/api/state"
 if ($state.outputDir -ne $backup -or $state.tokenProtection -ne 'dpapi') { throw 'Profilo precedente non conservato.' }
+if ($state.appVersion -ne $version -or $state.projects[0].scriptId -ne $scriptId -or $state.projects[0].diagnosticSettings.cloudProjectId -ne 'demo-cloud' -or $state.projects[0].triggerInventory.triggers[0].id -ne 'clock-1' -or -not $state.options.includeExecutions -or -not $state.options.includeTriggers) { throw 'Aggiornamento: ID, diagnostica o scelte ZIP non conservati.' }
 Stop-App $app
 $uninstaller = Start-Process -FilePath (Join-Path $install 'unins000.exe') -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait -PassThru
 if ($uninstaller.ExitCode -ne 0) { throw 'Disinstallazione fallita.' }
 if (Test-Path (Join-Path $install 'GoogleWorkspaceBackup.exe')) { throw 'Il programma non e stato rimosso.' }
 $after = @($paths | ForEach-Object { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash })
 if (($before -join ',') -ne ($after -join ',')) { throw 'Dati utente modificati da installazione/disinstallazione.' }
-Write-Host 'WINDOWS SMOKE OK: avvio senza Node globale, seconda istanza, reinstallazione e disinstallazione con dati conservati.'
+Write-Host "WINDOWS SMOKE OK: avvio senza Node globale, seconda istanza, upgrade reale 3.4.0 -> $version e disinstallazione con dati conservati."

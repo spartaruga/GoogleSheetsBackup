@@ -14,10 +14,11 @@ export function diagnosticRange(input = {}) {
   return { startTime: start.toISOString(), endTime: end.toISOString() };
 }
 
-export async function collectPages(fetchPage, field, { maxItems = 5000, maxPages = 100, initialToken } = {}) {
+export async function collectPages(fetchPage, field, { maxItems = 5000, maxPages = 100, initialToken, shouldCancel = () => false } = {}) {
   const items = [], seen = new Set();
   let token = initialToken;
   for (let page = 0; page < maxPages; page++) {
+    if (shouldCancel()) throw Object.assign(new Error('Backup annullato.'), {code:'BACKUP_CANCELLED'});
     if (token && seen.has(token)) throw new Error('Google ha ripetuto il cursore di pagina. Raccolta interrotta.');
     if (token) seen.add(token);
     const data = (await fetchPage(token)).data;
@@ -65,19 +66,20 @@ export function csvProcesses(processes) {
   return '\uFEFF' + [fields, ...processes.map(run => fields.map(field => run[field] || ''))].map(row => row.map(quote).join(';')).join('\r\n') + '\r\n';
 }
 
-export async function collectDiagnostics({ project, credentialsPath, tokenPath, days = 7, cloudProjectId = '', cloudScriptKey = '', includeLogs = false, maxItems = 5000, startTime, endTime, api, loggingApi }) {
+export async function collectDiagnostics({ project, credentialsPath, tokenPath, days = 7, cloudProjectId = '', cloudScriptKey = '', includeLogs = false, maxItems = 5000, startTime, endTime, api, loggingApi, auth: suppliedAuth, shouldCancel = () => false }) {
   const clean = validateProject(project);
   if (!clean.scriptId) throw new Error('Questo progetto non ha uno Script ID.');
   const range = diagnosticRange({ days, startTime, endTime });
-  let auth;
+  let auth = suppliedAuth;
   if (!api) { auth = await loadAuth(credentialsPath, tokenPath); api = google.script({ version: 'v1', auth }); }
   let executions;
   try {
     executions = await collectPages(token => api.processes.listScriptProcesses({
       scriptId: clean.scriptId, pageSize: 100, pageToken: token,
       'scriptProcessFilter.startTime': range.startTime, 'scriptProcessFilter.endTime': range.endTime,
-    }, { timeout: 60000 }), 'processes', { maxItems });
+    }, { timeout: 60000 }), 'processes', { maxItems, shouldCancel });
   } catch (error) {
+    if(error.code==='BACKUP_CANCELLED') throw error;
     throw new Error('Lettura esecuzioni non riuscita. Premi Abilita diagnostica, verifica Apps Script API e l’accesso al progetto. ' + (error?.response?.data?.error?.message || error.message));
   }
   const report = {
@@ -94,27 +96,90 @@ export async function collectDiagnostics({ project, credentialsPath, tokenPath, 
   for (const [field, method] of [['versions', api.projects?.versions], ['deployments', api.projects?.deployments]]) {
     if (!method?.list) continue;
     try {
-      const result = await collectPages(token => method.list({ scriptId: clean.scriptId, pageSize: 50, pageToken: token }, { timeout: 30000 }), field, { maxItems: 500 });
+      const result = await collectPages(token => method.list({ scriptId: clean.scriptId, pageSize: 50, pageToken: token }, { timeout: 30000 }), field, { maxItems: 500, shouldCancel });
       report[field] = result.items;
       if (result.truncated) report.warnings.push(field + ': elenco parziale.');
-    } catch (error) { report.warnings.push(field + ': ' + (error?.response?.data?.error?.message || error.message)); }
+    } catch (error) { if(error.code==='BACKUP_CANCELLED') throw error; report.warnings.push(field + ': ' + (error?.response?.data?.error?.message || error.message)); }
   }
   if (includeLogs) {
-    if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(cloudProjectId)) throw new Error('Inserisci l’ID del progetto Cloud dello script per leggere i log.');
-    const key = cloudScriptKey || clean.scriptId;
-    if (!/^[A-Za-z0-9_-]{10,200}$/.test(key)) throw new Error('Chiave script per i log non valida.');
     try {
+      if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(cloudProjectId)) throw new Error('Inserisci l’ID del progetto Cloud dello script per leggere i log.');
+      const key = cloudScriptKey || clean.scriptId;
+      if (!/^[A-Za-z0-9_-]{10,200}$/.test(key)) throw new Error('Chiave script per i log non valida.');
       const logging = loggingApi || google.logging({ version: 'v2', auth: auth || await loadAuth(credentialsPath, tokenPath) });
       report.cloudLogs = await collectPages(token => logging.entries.list({ requestBody: {
         resourceNames: ['projects/' + cloudProjectId],
         filter: 'resource.type="app_script_function" AND labels."script.googleapis.com/project_key"="' + key + '" AND timestamp>="' + range.startTime + '" AND timestamp<="' + range.endTime + '"',
         orderBy: 'timestamp desc', pageSize: 100, pageToken: token,
-      } }, { timeout: 60000 }), 'entries', { maxItems });
+      } }, { timeout: 60000 }), 'entries', { maxItems, shouldCancel });
       if (report.cloudLogs.truncated) report.warnings.push('Log Cloud parziali: riduci il periodo.');
       if (!report.cloudLogs.items.length) report.warnings.push('Nessun log Cloud trovato: verifica il progetto Cloud, la chiave project_key, i permessi e la conservazione.');
-    } catch (error) { report.warnings.push('Log Cloud non disponibili: ' + (error?.response?.data?.error?.message || error.message)); }
+    } catch (error) { if(error.code==='BACKUP_CANCELLED') throw error; report.warnings.push('Log Cloud non disponibili: ' + (error?.response?.data?.error?.message || error.message)); }
   }
   return report;
+}
+
+async function writeDiagnosticFiles(report, directory) {
+  await fsp.writeFile(path.join(directory, 'esecuzioni.json'), JSON.stringify(report, null, 2));
+  await fsp.writeFile(path.join(directory, 'esecuzioni.csv'), csvProcesses(report.executions.items));
+  const lines = ['# Diagnostica Apps Script', '', report.project.name, '', ...report.summary.map(row => `- ${row.functionName}: ${row.runs} esecuzioni; ${row.failed} errori; ${row.timedOut} timeout; durata massima ${row.maxSeconds}s; ${row.automaticOutsideNight} avvii automatici fuori 20:00–08:30.`), '', '## Avvisi', '', ...report.warnings.map(w => '- ' + w), '', ...report.limitations.map(w => '- ' + w), '', 'Questi file possono contenere dati personali o segreti presenti nei log. Controllali prima di condividerli.'];
+  await fsp.writeFile(path.join(directory, 'LEGGIMI.md'), lines.join('\n') + '\n');
+}
+
+export function diagnosticSettings(input = {}) {
+  const days = Number(input.days ?? 7); diagnosticRange({days});
+  const cloudProjectId = String(input.cloudProjectId || '').trim(), cloudScriptKey = String(input.cloudScriptKey || '').trim();
+  if(cloudProjectId && !/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(cloudProjectId)) throw new Error('ID progetto Cloud non valido.');
+  if(cloudScriptKey && !/^[A-Za-z0-9_-]{10,200}$/.test(cloudScriptKey)) throw new Error('Chiave script Cloud non valida.');
+  return {days, includeLogs:input.includeLogs===true, cloudProjectId, cloudScriptKey};
+}
+
+export function triggerInventory(input, scriptId) {
+  if(input?.scriptId!==scriptId || !Array.isArray(input.triggers) || input.triggers.length>100 || !Number.isFinite(Date.parse(input.exportedAt))) throw new Error('Inventario non valido, senza data o relativo a un altro progetto.');
+  const triggers=input.triggers.map(item=>{
+    const result={};
+    for(const key of ['id','handler','eventType','source','sourceId']) {
+      result[key]=String(item[key] || '');
+      if(result[key].length>500) throw new Error('Inventario trigger troppo grande.');
+    }
+    result.schedule=null;
+    if(item.schedule && typeof item.schedule==='object') {
+      result.schedule={};
+      for(const key of ['kind','timeZone','hour','minute','weekDay','interval']) if(['string','number'].includes(typeof item.schedule[key])) result.schedule[key]=item.schedule[key];
+      if(JSON.stringify(result.schedule).length>1000) throw new Error('Orario trigger non valido.');
+    }
+    return result;
+  });
+  return {formatVersion:'1.0',scriptId,exportedAt:new Date(input.exportedAt).toISOString(),triggers};
+}
+
+export async function collectBackupExtras({project, options, auth, api, directory, emit=()=>{}, shouldCancel=()=>false}) {
+  const warnings=[];
+  if(!options.includeExecutions && !options.includeTriggers) return warnings;
+  if(!project.scriptId) return ['Diagnostica non raccolta: il progetto non ha uno Script ID.'];
+  const target=path.join(directory,'diagnostics');
+  await fsp.mkdir(target,{recursive:true});
+  if(options.includeExecutions) {
+    emit('info','Raccolta esecuzioni per lo ZIP...',85);
+    try {
+      const settings=diagnosticSettings(project.diagnosticSettings);
+      const report=await collectDiagnostics({project,...settings,days:options.executionDays ?? 7,auth,api,shouldCancel});
+      await writeDiagnosticFiles(report,target); warnings.push(...report.warnings);
+    } catch(error) {
+      if(error.code==='BACKUP_CANCELLED') throw error;
+      const message='Esecuzioni non raccolte: '+error.message; warnings.push(message);
+      await fsp.writeFile(path.join(target,'esecuzioni.json'),JSON.stringify({status:'unavailable',scriptId:project.scriptId,collectedAt:new Date().toISOString(),error:message},null,2));
+    }
+  }
+  if(options.includeTriggers) {
+    let inventory;
+    try {inventory=triggerInventory(project.triggerInventory,project.scriptId);} catch {}
+    const message=inventory?'Trigger: copia dell’inventario salvato il '+inventory.exportedAt+'. Non è una lettura live.':'Inventario trigger non disponibile: salva una volta il JSON di gwbExportTriggers nella pagina Trigger ed esecuzioni.';
+    if(!inventory) warnings.push(message);
+    else emit('info',message,87);
+    await fsp.writeFile(path.join(target,'triggers.json'),JSON.stringify({status:inventory?'saved_snapshot':'unavailable',live:false,...inventory,scriptId:project.scriptId,warning:message},null,2));
+  }
+  return warnings;
 }
 
 export async function saveDiagnosticReport(report, outputDir) {
@@ -122,10 +187,7 @@ export async function saveDiagnosticReport(report, outputDir) {
   const directory = path.join(path.resolve(outputDir), name);
   await fsp.mkdir(path.resolve(outputDir), { recursive: true });
   await fsp.mkdir(directory, { recursive: false });
-  await fsp.writeFile(path.join(directory, 'esecuzioni.json'), JSON.stringify(report, null, 2));
-  await fsp.writeFile(path.join(directory, 'esecuzioni.csv'), csvProcesses(report.executions.items));
-  const lines = ['# Diagnostica Apps Script', '', report.project.name, '', ...report.summary.map(row => `- ${row.functionName}: ${row.runs} esecuzioni; ${row.failed} errori; ${row.timedOut} timeout; durata massima ${row.maxSeconds}s; ${row.automaticOutsideNight} avvii automatici fuori 20:00–08:30.`), '', '## Avvisi', '', ...report.warnings.map(w => '- ' + w), '', ...report.limitations.map(w => '- ' + w), '', 'Questi file possono contenere dati personali o segreti presenti nei log. Controllali prima di condividerli.'];
-  await fsp.writeFile(path.join(directory, 'LEGGIMI.md'), lines.join('\n') + '\n');
+  await writeDiagnosticFiles(report,directory);
   const zipPath = directory + '.zip';
   await new Promise((resolve, reject) => {
     const output = fs.createWriteStream(zipPath), archive = new ZipArchive({ zlib: { level: 9 } });

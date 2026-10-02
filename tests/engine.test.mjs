@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import { google } from 'googleapis';
 import { backupProjects, createAiZip, publishAppsScriptProject, getSpreadsheetSnapshot, rehydrateRedactions, redactSecrets, normalizeAiPath, SCOPES, PUBLISH_SCOPES, runSelfTest } from '../engine.mjs';
 import { temporary, readZip } from './helpers.mjs';
+import { collectBackupExtras } from '../diagnostics.mjs';
 
 const fakeKey = ['AI', 'za', '1234567890'.repeat(3), '12345'].join('');
 const id = '1234567890'.repeat(2);
@@ -90,6 +91,37 @@ test('backup, formulas, formatting, notes, paginated comments, ZIP, protected pu
   mock.setLive({ files: [...initial.files, { name: 'External', type: 'SERVER_JS', source: '// external' }] });
   await assert.rejects(publishAppsScriptProject(args), /Pubblicazione bloccata/);
   assert.equal(mock.updates, 1);
+});
+
+test('optional execution and trigger files share the normal ZIP and reuse saved IDs independently', async t => {
+  const mock=await mockGoogle(t),queries=[];
+  t.mock.method(google,'script',()=>({projects:{get:async()=>({data:{title:'Demo'}}),getContent:async()=>({data:structuredClone(initial)})},processes:{listScriptProcesses:async query=>{queries.push(query);return {data:{processes:[{functionName:'sync',processStatus:'TIMED_OUT',duration:'360s'}]}};}}}));
+  let logQueries=0;
+  t.mock.method(google,'logging',()=>({entries:{list:async query=>{logQueries++;assert.deepEqual(query.requestBody.resourceNames,['projects/demo-cloud']);assert(query.requestBody.filter.includes(id));return {data:{entries:[{jsonPayload:{message:'Exception: demo '+fakeKey}}]}};}}}));
+  const project={id:'demo',name:'Demo',scriptId:id,diagnosticSettings:{cloudProjectId:'demo-cloud',cloudScriptKey:id,includeLogs:true},triggerInventory:{scriptId:id,exportedAt:'2026-10-01T20:00:00Z',triggers:[{id:'clock-1',handler:'sync',eventType:'CLOCK'}]}};
+  for(const flags of [{},{includeExecutions:true},{includeTriggers:true},{includeExecutions:true,includeTriggers:true}]) {
+    const result=await backupProjects({...mock,projects:[project],outputDir:path.join(mock.directory,'output'),options:{...flags,executionDays:30},collectExtras:collectBackupExtras});
+    assert.equal(result.failed,0);const zip=await readZip(result.results[0].zipPath);
+    assert.equal(zip.has('diagnostics/esecuzioni.json'),flags.includeExecutions===true);
+    assert.equal(zip.has('diagnostics/esecuzioni.csv'),flags.includeExecutions===true);
+    assert.equal(zip.has('diagnostics/triggers.json'),flags.includeTriggers===true);
+    if(flags.includeExecutions){const report=JSON.parse(zip.get('diagnostics/esecuzioni.json'));assert.equal(report.project.scriptId,id);assert.equal(report.cloudLogs.items.length,1);assert.equal(report.summary[0].timedOut,1);assert.equal(Date.parse(report.range.endTime)-Date.parse(report.range.startTime),30*86400000);assert(!zip.get('diagnostics/esecuzioni.json').toString().includes(fakeKey));assert((await fs.readFile(path.join(result.results[0].directory,'diagnostics/esecuzioni.json'),'utf8')).includes(fakeKey));}
+    if(flags.includeTriggers){const inventory=JSON.parse(zip.get('diagnostics/triggers.json'));assert.equal(inventory.status,'saved_snapshot');assert.equal(inventory.live,false);assert.equal(inventory.triggers[0].id,'clock-1');assert.equal(inventory.exportedAt,'2026-10-01T20:00:00.000Z');}
+    assert(!zip.has('credentials.json'));assert(!zip.has('token.json'));
+  }
+  assert.equal(queries.length,2);assert(queries.every(query=>query.scriptId===id));assert.equal(logQueries,2);
+});
+
+test('unavailable optional diagnostics do not discard a successful backup or pretend triggers were read',async t=>{
+  const mock=await mockGoogle(t);
+  t.mock.method(google,'script',()=>({projects:{get:async()=>({data:{title:'Demo'}}),getContent:async()=>({data:structuredClone(initial)})},processes:{listScriptProcesses:async()=>{throw new Error('insufficient scope');}}}));
+  const result=await backupProjects({...mock,projects:[{id:'demo',name:'Demo',scriptId:id}],outputDir:path.join(mock.directory,'output'),options:{includeExecutions:true,includeTriggers:true},collectExtras:collectBackupExtras});
+  assert.equal(result.succeeded,1);assert.equal(result.failed,0);
+  const zip=await readZip(result.results[0].zipPath);
+  assert.equal(JSON.parse(zip.get('diagnostics/esecuzioni.json')).status,'unavailable');
+  assert.equal(JSON.parse(zip.get('diagnostics/triggers.json')).status,'unavailable');
+  assert(result.results[0].info.warnings.some(w=>w.includes('Abilita diagnostica')));
+  assert(zip.has('apps-script/Code.gs'));
 });
 
 test('changed script after privacy review fails; spreadsheet exclusion removes data', async t => {

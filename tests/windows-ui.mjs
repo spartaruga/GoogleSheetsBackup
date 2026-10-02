@@ -15,6 +15,7 @@ const child = spawn(browserPath, ['--headless=new', '--disable-gpu', '--no-first
 let socket, nextId = 0;
 const pending = new Map(), errors = [];
 let resolvePageLoaded;
+const mockState={version:3,appVersion:JSON.parse(fs.readFileSync(new URL('../package.json',import.meta.url),'utf8')).version,nodeVersion:process.version,options:{xlsx:true,zip:true},projects:[{id:'demo',name:'Progetto test',scriptId:'1234567890'.repeat(2),diagnosticSettings:{cloudProjectId:'demo-cloud',days:7}},{id:'peer',name:'Altro progetto',scriptId:'9876543210'.repeat(2),diagnosticSettings:{cloudProjectId:'other-cloud',days:1}}],history:[],outputDir:'Cartella test',accessChecks:[]};
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 function send(method, params = {}, sessionId) {
   return new Promise((resolve, reject) => {
@@ -43,7 +44,16 @@ try {
       const route=new URL(message.params.request.url).pathname;
       let result;
       const functions=['gestionale_nightImport','gestionale_nightPrimaNota','gestionale_nightClients','gestionale_nightSuppliers','gestionale_nightMaintenance','gestionale_nightF24','gestionale_nightDeadlines','gestionale_nightAudit','gestionale_nightHome','gestionale_nightSupplierReminder','gestionale_nightTaxReminder','gestionale_repairFormulaErrors'];
-      if(route==='/api/state') result={version:3,appVersion:'3.4.0',nodeVersion:process.version,options:{xlsx:true,zip:true},projects:[{id:'demo',name:'Progetto test',scriptId:'1234567890'.repeat(2)}],history:[],outputDir:'Cartella test',accessChecks:[]};
+      if(route==='/api/state') {
+        if(message.params.request.method==='POST') {
+          const payload=JSON.parse(message.params.request.postData);
+          mockState.projects=payload.projects.map(p=>({...mockState.projects.find(old=>old.id===p.id),...p}));
+          mockState.options=payload.options;mockState.outputDir=payload.outputDir;
+        }
+        result=mockState;
+      }
+      else if(route==='/api/diagnostics/settings') {const payload=JSON.parse(message.params.request.postData);const project=mockState.projects.find(p=>p.id===payload.projectId);project.diagnosticSettings=payload;result={projectId:project.id,settings:payload};}
+      else if(route==='/api/triggers/inventory') {const payload=JSON.parse(message.params.request.postData);mockState.projects.find(p=>p.id===payload.projectId).triggerInventory=payload.inventory;result={inventory:payload.inventory};}
       else if(route==='/api/triggers/functions') result={functions,scriptId:'1234567890'.repeat(2),editorUrl:'https://example.invalid'};
       else if(route==='/api/triggers/prepare') {const rows=JSON.parse(message.params.request.postData).rows;result={id:'demo-plan',plan:rows,source:'function gwbApplyTriggerPlan() {}',changedFiles:['apps-script/GWB_Triggers.gs'],safetyBackupDirectory:'Cartella test'};}
       else if(route==='/api/diagnostics') result={directory:'Cartella test',downloadUrl:'/mock.zip',report:{executions:{items:[{functionName:'sync',processStatus:'TIMED_OUT',duration:'360s',startTime:'2026-10-01T20:00:00Z'}]},summary:[{functionName:'sync',runs:1,timedOut:1,failed:0,maxSeconds:360}],warnings:['Avviso test'],limitations:['API simulate']}};
@@ -64,8 +74,22 @@ try {
   await loaded;
   const expression=`(async()=>{
     const wait=async fn=>{for(let i=0;i<180;i++){if(fn())return;await new Promise(r=>setTimeout(r,50));}throw new Error('Attesa UI fallita');};
-    await wait(()=>document.querySelector('#diagnosticProject option'));
+    await wait(()=>document.querySelector('#diagnosticProject option') && document.querySelectorAll('#projectsBody tr').length===2);
+    document.querySelector('#executionOption').checked=true;document.querySelector('#triggerOption').checked=true;document.querySelector('#executionDays').value='30';
+    await saveSettings(false);
     document.querySelector('[data-page="diagnostics"]').click();
+    document.querySelector('#diagnosticCloudId').value='main-cloud';
+    document.querySelector('#saveDiagnosticSettingsButton').click();
+    await wait(()=>!document.querySelector('#saveDiagnosticSettingsButton').disabled);
+    const select=document.querySelector('#diagnosticProject');select.value='peer';select.dispatchEvent(new Event('change'));
+    if(document.querySelector('#diagnosticCloudId').value!=='other-cloud')throw new Error('Impostazioni di un altro progetto perse');
+    select.value='demo';select.dispatchEvent(new Event('change'));
+    if(document.querySelector('#diagnosticCloudId').value!=='main-cloud')throw new Error('Cloud ID salvato non ripristinato');
+    document.querySelector('#triggerInventoryInput').value=JSON.stringify({scriptId:'1234567890'.repeat(2),exportedAt:new Date().toISOString(),triggers:[{id:'clock-1',handler:'sync',eventType:'CLOCK'}]});
+    document.querySelector('#readTriggerInventoryButton').click();
+    await wait(()=>document.querySelector('#triggerInventoryOutput').textContent.includes('clock-1'));
+    const saved=await api('/api/state');
+    if(!saved.options.includeExecutions || !saved.options.includeTriggers || saved.options.executionDays!==30 || saved.projects[0].scriptId!=='1234567890'.repeat(2) || !saved.projects[0].triggerInventory)throw new Error('Scelte ZIP o ID non conservati');
     document.querySelector('#loadTriggerFunctionsButton').click();
     await wait(()=>!document.querySelector('#nightTriggerPresetButton').disabled);
     document.querySelector('#nightTriggerPresetButton').click();
@@ -84,7 +108,7 @@ try {
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true},sessionId);
   const mobile=await send('Runtime.evaluate',{expression:'document.documentElement.scrollWidth <= innerWidth + 1',returnByValue:true},sessionId);
   if(!mobile.result.value) throw new Error('Overflow della pagina su schermo stretto.');
-  console.log('UI browser OK: 12 regole, anteprima, diagnostica, invalidazione e schermo stretto. API Google simulate.');
+  console.log('UI browser OK: impostazioni per progetto, scelte ZIP, inventario salvato, 12 regole, anteprima, diagnostica, invalidazione e schermo stretto. API Google simulate.');
 } finally {
   if(socket?.readyState===WebSocket.OPEN) {try{await send('Browser.close');}catch{}socket.close();}
   child.kill();await delay(500);await fsp.rm(profile,{recursive:true,force:true,maxRetries:5,retryDelay:200});

@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.4.1 — 2026-10-02
+
+- Aggiunte al normale backup le opzioni indipendenti «Includi esecuzioni» e «Includi inventario trigger salvato», con periodo 1/7/30 giorni. I dati scelti finiscono nello stesso ZIP per l’AI.
+- Gli ID Foglio e Apps Script restano quelli del progetto già salvato; ID Cloud, chiave script, preferenze e inventario trigger sono memorizzati per progetto. La raccolta manuale salva anche le sue impostazioni.
+- Il JSON trigger viene salvato una volta e riutilizzato, con data e indicazione esplicita che è una copia salvata. Per aggiornare l’inventario occorre una nuova esportazione da Apps Script: non viene presentato come una lettura live.
+- Un errore nei permessi diagnostici non elimina il backup: lo ZIP contiene un avviso esplicito. Log Cloud mancanti o mal configurati non fanno perdere le esecuzioni già raccolte.
+- I token riconoscibili nei file diagnostici vengono censurati nella copia ZIP per l’AI; i dati originali restano nel backup locale.
+- 40 test automatici superati. Aggiunto al collaudo Windows l’upgrade dalla Release pubblica 3.4.0 con verifica degli ID, delle impostazioni e dei dati conservati. Le API Google sono simulate nei test.
+
 ## 3.4.0 — 2026-10-01
 
 ### Installer e Release

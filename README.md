@@ -78,7 +78,17 @@ Per fermarti usa **Annulla backup**. La richiesta viene eseguita al punto sicuro
 
 Il JSON nativo è il riferimento per le formule Google; Excel può convertirle o rappresentarle diversamente. Commenti e copia Excel possono fallire separatamente: il programma salva un avviso. Non considerare il backup completo senza controllare questi avvisi.
 
-**Non vengono salvati automaticamente:** cronologia revisioni completa, file collegati tramite URL, allegati Drive, proprietà Script/User/Document Properties, trigger installabili, deployment/versioni Apps Script precedenti, impostazioni Google Cloud e autorizzazioni necessarie a ricostruire tutto. Non è un ripristino completo con un clic. Vengono salvati i contenuti che le API e l'account rendono disponibili, non una clonazione integrale di Google Workspace.
+**Non vengono salvati automaticamente:** cronologia revisioni completa, file collegati tramite URL, allegati Drive, proprietà Script/User/Document Properties, inventario live dei trigger installabili, deployment/versioni Apps Script precedenti, impostazioni Google Cloud e autorizzazioni necessarie a ricostruire tutto. Non è un ripristino completo con un clic. Vengono salvati i contenuti che le API e l'account rendono disponibili, non una clonazione integrale di Google Workspace.
+
+### Esecuzioni e trigger nello stesso ZIP
+
+Nella pagina **Backup** scegli **Includi esecuzioni Apps Script nello ZIP** e/o **Includi inventario trigger salvato nello ZIP**, più il periodo 1/7/30 giorni. Le scelte restano memorizzate e usano i progetti e gli ID già salvati. I file selezionati vengono aggiunti alla cartella `diagnostics/` nello stesso ZIP per l’AI; con entrambe le caselle spente il backup mantiene il contenuto precedente.
+
+L’accesso Google, gli ID e la destinazione restano nel profilo durante l’aggiornamento: chiudi il programma e installa il nuovo Setup. Non serve riconfigurare i progetti. I permessi per leggere le esecuzioni si abilitano una volta con **Abilita diagnostica**.
+
+Per i dettagli Cloud, configura il progetto una volta in **Trigger ed esecuzioni → Salva impostazioni del progetto**. La raccolta manuale salva anche queste impostazioni. Ogni progetto conserva il proprio ID Cloud e la propria chiave script. I token riconoscibili nei file diagnostici vengono censurati nella copia ZIP per l’AI; controlla comunque i log prima di condividere dati personali.
+
+Per i trigger, esegui `gwbExportTriggers` nell’editor Apps Script e usa **Salva inventario** una volta. Il programma riutilizza quel JSON nei successivi ZIP, con la data originale e `live: false`; se modifichi i trigger, salva un inventario aggiornato. Un inventario assente o un errore di autorizzazione delle esecuzioni produce un avviso nello ZIP, senza eliminare il normale backup. Cambiare lo Script ID del progetto azzera le impostazioni diagnostiche e l’inventario associati al vecchio script.
 
 ## Trigger ed esecuzioni
 
@@ -92,7 +102,7 @@ La tabella mostra errori, timeout, durate e avvii automatici fuori 20:00–08:30
 
 Le regole sostituiscono/rimuovono solo i trigger CLOCK degli handler elencati e dell’account che esegue la funzione. Gli altri trigger restano presenti. Il piano viene applicato una regola alla volta: se una regola fallisce, quelle precedenti possono essere già applicate. Rilancia **lo stesso piano** per completarlo. Se la quota è già piena, Google può impedire anche una singola sostituzione: rimuovi una regola non necessaria prima di crearne una nuova. Gli orari sono approssimativi, ±15 minuti.
 
-Per verificare il risultato esegui **`gwbExportTriggers`** nell’editor e incolla il JSON nel riquadro inventario. Google non espone il calendario dei trigger creati da altri installer: il programma mostra l’orario solo per i trigger creati con questo gestore. Il preset notturno richiede le funzioni `gestionale_night…` già pubblicate; non elimina automaticamente i vecchi handler diversi.
+Per verificare il risultato esegui **`gwbExportTriggers`** nell’editor e salva il JSON nel riquadro inventario. Rimane memorizzato per il progetto, anche dopo il riavvio. Google non espone il calendario dei trigger creati da altri installer: il programma mostra l’orario solo per i trigger creati con questo gestore. Il preset notturno richiede le funzioni `gestionale_night…` già pubblicate; non elimina automaticamente i vecchi handler diversi.
 
 La pubblicazione del piano **non cambia i trigger** finché non esegui la funzione nell’editor. Le API Google non possono crearli. Fonti: [limiti dell’API](https://developers.google.com/apps-script/api/how-tos/execute#limitations), [storico processi](https://developers.google.com/apps-script/api/reference/rest/v1/processes/listScriptProcesses), [Cloud Logging](https://developers.google.com/apps-script/guides/logging).
 
