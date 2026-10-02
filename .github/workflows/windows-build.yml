@@ -131,4 +131,33 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: node scripts/publish-release.mjs
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import {spawnSync} from 'node:child_process';
+          // One-time repair of the 3.4.1 draft's provisional tag; preserve its assets and commit.
+          if(JSON.parse(fs.readFileSync('package.json','utf8')).version!=='3.4.2')process.exit(0);
+          const repo='spartaruga/GoogleSheetsBackup', tag='v3.4.1', commit='67b0e3d7ea04f4ca255d27dc9361ce24fd01cb87';
+          if(process.env.GH_REPO!==repo)throw new Error('Repository riparazione non valido.');
+          const api=(args)=>{const r=spawnSync('gh',['api',...args],{encoding:'utf8',env:process.env});if(r.error)throw r.error;if(r.status!==0)throw new Error(r.stderr);return JSON.parse(r.stdout);};
+          const endpoint=`repos/${repo}/releases/401968086`, release=api([endpoint]);
+          const expected={
+            'GoogleWorkspaceBackup-Setup-3.4.1.exe':'sha256:417b8fb95bb9de14607aacae863d1255ffa4373271b9c7ed60fadd3c9fd19bb1',
+            'GoogleWorkspaceBackup-Setup-3.4.1.exe.sha256':'sha256:eeccf207320c34f3ad9b38a9e0225d626df1efcbb98cb9bcec2bb65cf4648b88',
+            'GoogleWorkspaceBackup_v3.4.1_source.zip':'sha256:8e346d8e3023b2501b069de33ef01234665df1b9631227f734a8a541627e3614',
+            'GoogleWorkspaceBackup_v3.4.1_source.zip.sha256':'sha256:9518a8c6056d199a40a3c818223041ad0762a0a4800a75642ec1277e612c2359'
+          };
+          if(release.draft||release.target_commitish!==commit||release.name!=='Google Workspace Backup 3.4.1'||release.assets.length!==4||release.assets.some(a=>expected[a.name]!==a.digest||a.state!=='uploaded'))throw new Error('Release 3.4.1 diversa da quella verificata: riparazione interrotta.');
+          const refs=api([`repos/${repo}/git/matching-refs/tags/${tag}`]).filter(r=>r.ref===`refs/tags/${tag}`);
+          if(refs.some(r=>r.object.sha!==commit))throw new Error('Tag 3.4.1 gia associato a un altro commit.');
+          if(release.tag_name!==tag){
+            if(!/^untagged-/.test(release.tag_name))throw new Error('Etichetta 3.4.1 inattesa.');
+            const file='release/tag-repair-request.json';
+            fs.writeFileSync(file,JSON.stringify({tag_name:tag,target_commitish:commit,name:release.name,body:release.body,draft:false,prerelease:false,make_latest:'false'}));
+            const fixed=api([endpoint,'--method','PATCH','--header','Content-Type: application/json','--input',file]);
+            if(fixed.tag_name!==tag||fixed.target_commitish!==commit||fixed.draft||fixed.assets.length!==4||fixed.assets.some(a=>expected[a.name]!==a.digest))throw new Error('Riparazione del tag non verificata.');
+          }
+          if(api([`repos/${repo}/commits/${tag}`]).sha!==commit)throw new Error('Commit del tag riparato non valido.');
+          console.log('Release 3.4.1: tag verificato, commit e asset conservati.');
+          NODE
+          node scripts/publish-release.mjs

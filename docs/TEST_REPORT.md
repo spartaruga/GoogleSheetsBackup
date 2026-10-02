@@ -1,5 +1,12 @@
 # Verifiche
 
+## Versione 3.4.2 — 2026-10-02
+
+- 43 test locali, self-test e controllo repository superati. Il nuovo caso verifica che una risposta di pubblicazione con un tag inatteso non venga dichiarata riuscita.
+- Il tag viene trasmesso esplicitamente nella creazione, nella modifica della bozza e nella pubblicazione. Restano i controlli su commit e checksum e il divieto di sostituire release già pubblicate.
+- La procedura 3.4.2 corregge una volta l’etichetta provvisoria della Release 3.4.1, soltanto dopo aver verificato ID, commit e digest dei quattro asset; non ne sostituisce i byte.
+- I [42 test e il collaudo Windows della 3.4.1](https://github.com/spartaruga/GoogleSheetsBackup/actions/runs/37033480659) hanno superato UI, upgrade dalla 3.4.0 e conservazione dei dati. Il nuovo pacchetto ripete questi controlli prima della pubblicazione. Nessuna chiamata Google autenticata nei test.
+
 ## Versione 3.4.1 — 2026-10-02
 
 - Self-test, 42 test Node, controllo repository e audit npm superati in Linux. Nessuna chiamata Google autenticata nei test.

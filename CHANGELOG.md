@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.4.2 — 2026-10-02
+
+- Mantiene le opzioni ZIP e le impostazioni persistenti della 3.4.1: ID esistenti, esecuzioni e inventario trigger salvato riutilizzabili senza reinserirli.
+- La pubblicazione specifica il tag in ogni aggiornamento REST e verifica tag e stato anche nella risposta finale. Non considera completata una release pubblicata con un’etichetta provvisoria.
+- Corretta l’etichetta della Release 3.4.1 senza sostituirne i file o cambiarne il commit.
+- 43 test automatici, incluso il caso di risposta con un tag inatteso. Il collaudo Windows verifica l’upgrade dalla 3.4.0 preservando dati e impostazioni; le API Google sono simulate.
+
 ## 3.4.1 — 2026-10-02
 
 - Aggiunte al normale backup le opzioni indipendenti «Includi esecuzioni» e «Includi inventario trigger salvato», con periodo 1/7/30 giorni. I dati scelti finiscono nello stesso ZIP per l’AI.
