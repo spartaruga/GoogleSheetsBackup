@@ -1,0 +1,10 @@
+{
+  "format": "gwb-update-channel-v1",
+  "version": "3.5.0",
+  "packageBlob": "f9e3191f7e84651f83410211c73ccde93a3065be",
+  "sha256": "72ebf5bb2023fda217ffe7acf9f97e3f20a85936bce0a4d0fec5b009df94d174",
+  "size": 99773,
+  "sourceCommit": "5b8ca7a50b6655c845a20dac1ec7e2c6a2376d68",
+  "notes": "Aggiornamenti ZIP senza Actions, ripristino automatico e chiusura delle istanze precedenti con conferma per quelle bloccate.",
+  "publishedAt": "2026-10-03T11:33:13.414Z"
+}
