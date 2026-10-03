@@ -1,6 +1,6 @@
 {
   "name": "google-workspace-backup",
-  "version": "3.4.5",
+  "version": "3.5.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,7 +13,8 @@
     "check:repo": "node scripts/check-repo.mjs",
     "build": "node scripts/build.mjs",
     "installer": "node scripts/installer.mjs",
-    "source": "node scripts/source.mjs"
+    "source": "node scripts/source.mjs",
+    "update:package": "node scripts/update-package.mjs"
   },
   "dependencies": {
     "archiver": "8.0.0",

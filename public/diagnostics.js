@@ -92,7 +92,17 @@
   $('checkUpdatesButton').addEventListener('click', event => busy(event.currentTarget, async () => {
     const result = await api('/api/updates');
     if (!result.available) return showToast(result.message || `Versione ${result.currentVersion} aggiornata.`);
-    if (window.confirm(`Disponibile versione ${result.latestVersion}. Aprire la Release ufficiale per scaricare l’installer?`)) window.open(result.releaseUrl, '_blank', 'noopener,noreferrer');
+    if(result.kind==='zip') {
+      if(!window.confirm(`Installare la versione ${result.latestVersion}? L’app verrà chiusa e riaperta. Credenziali, ID e impostazioni restano salvati.`))return;
+      const installed=await api('/api/updates/install',{method:'POST',body:'{}'});showToast(installed.message);
+    }else if (window.confirm(`Disponibile versione ${result.latestVersion}. Aprire la Release ufficiale per scaricare l’installer?`)) window.open(result.releaseUrl, '_blank', 'noopener,noreferrer');
+  }));
+  $('closeInstancesButton').addEventListener('click',event=>busy(event.currentTarget,async()=>{
+    let result=await api('/api/instances/close',{method:'POST',body:'{}'});
+    if(result.busy.length)throw new Error('Una vecchia istanza ha un’operazione in corso: attendi oppure annullala prima di chiudere.');
+    if(result.needsForce.length && window.confirm(`${result.needsForce.length} istanze verificate non rispondono. Chiuderle forzatamente? Le operazioni non salvate potrebbero andare perse.`)) result=await api('/api/instances/close',{method:'POST',body:JSON.stringify({force:true})});
+    if(result.busy.length)throw new Error('Operazione in corso nella vecchia istanza. Chiusura bloccata.');
+    showToast(result.needsForce.length?'Chiusura incompleta: riprova dopo aver controllato le vecchie istanze.':`${result.closed} processi precedenti chiusi.`);
   }));
   $('loadTriggerFunctionsButton').addEventListener('click', event => busy(event.currentTarget, async () => {
     const selected = projectId();

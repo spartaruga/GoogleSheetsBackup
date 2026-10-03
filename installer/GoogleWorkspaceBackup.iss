@@ -41,6 +41,8 @@ Name: "desktopicon"; Description: "Crea un collegamento sul Desktop"; Flags: unc
 
 [Files]
 Source: "CloseApp.ps1"; Flags: dontcopy
+Source: "{#SourceDir}\app\app-processes.mjs"; Flags: dontcopy
+Source: "{#SourceDir}\runtime\node.exe"; DestName: "gwb-helper-node.exe"; Flags: dontcopy
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
@@ -62,9 +64,12 @@ end;
 function CheckApp(Mode: String): Integer;
 begin
   ExtractTemporaryFile('CloseApp.ps1');
+  ExtractTemporaryFile('app-processes.mjs');
+  ExtractTemporaryFile('gwb-helper-node.exe');
   if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
     '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
-    ExpandConstant('{tmp}\CloseApp.ps1') + '" -Mode ' + Mode,
+    ExpandConstant('{tmp}\CloseApp.ps1') + '" -InstallDirectory "' + ExpandConstant('{app}') +
+    '" -HelperDirectory "' + ExpandConstant('{tmp}') + '" ' + Mode,
     '', SW_HIDE, ewWaitUntilTerminated, Result) then Result := 4;
 end;
 
@@ -80,12 +85,16 @@ var
   ResultCode, Attempt: Integer;
 begin
   Result := '';
-  ResultCode := CheckApp('Check');
+  ResultCode := CheckApp('-Mode Check');
   if (ResultCode = 1) and not WizardSilent then begin
     if TaskDialogMsgBox('Google Workspace Backup e aperto',
       'Per aggiornare occorre chiudere il programma. Le operazioni in corso impediscono la chiusura; dati e backup salvati vengono conservati.',
       mbInformation, MB_OKCANCEL, ['Chiudi l''app e continua', 'Annulla aggiornamento'], 0) = IDOK then
-      ResultCode := CheckApp('Close');
+      ResultCode := CheckApp('-Mode Close');
+  end;
+  if (ResultCode = 3) and not WizardSilent then begin
+    if MsgBox('Alcune istanze verificate non rispondono. Chiuderle forzatamente? Eventuali operazioni non salvate possono andare perse.', mbConfirmation, MB_YESNO) = IDYES then
+      ResultCode := CheckApp('-Mode Close -Force');
   end;
   if ResultCode = 0 then begin
     { Node exits first; wait for cmd, PowerShell and the EXE launcher too. }

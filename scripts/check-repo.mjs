@@ -3,6 +3,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { findSecrets } from '../engine.mjs';
 import { root } from './common.mjs';
+import { validateUpdate } from '../app-updates.mjs';
+import { validateChannel } from '../updates.mjs';
 
 export function inspectText(name, text) {
   const issues = [];
@@ -41,7 +43,22 @@ export function checkRepo() {
     const bytes = fs.readFileSync(full);
     if (bytes.includes(0)) { failures.push(`${name}: binario inatteso`); continue; }
     // Lockfile integrity hashes/package author metadata are not user secrets.
-    if (name !== 'package-lock.json') failures.push(...inspectText(name, bytes.toString('utf8')));
+    if (/^packages\/v\d+\.\d+\.\d+\.json$/.test(name)) {
+      try {
+        const envelope=JSON.parse(bytes);
+        if(envelope.format!=='gwb-update-envelope-v1'||typeof envelope.payload!=='string')throw new Error('envelope');
+        const payload=Buffer.from(envelope.payload,'base64'),update=validateUpdate(payload,envelope.sha256);
+        if(update.manifest.version!==envelope.version||payload.length!==envelope.size||name!==`packages/v${envelope.version}.json`)throw new Error('version');
+        for(const [entry,content] of update.entries)if(!entry.endsWith('package-lock.json'))failures.push(...inspectText(name+':'+entry,content.toString('utf8')));
+      }catch{failures.push(name+': pacchetto aggiornamento non valido');}
+    }else if(name==='packages/stable.json') {try{validateChannel(JSON.parse(bytes));}catch{failures.push(name+': canale non valido');}}
+    else if(name==='Aggiorna-GWB.cmd') {
+      try {
+        const text=bytes.toString(),script=Buffer.from(text.slice(text.lastIndexOf('# GWB_PAYLOAD_BEGIN')+19).trim(),'base64').toString();
+        if(script!==fs.readFileSync(path.join(root,'scripts/bootstrap.ps1'),'utf8'))throw new Error('bootstrap');
+        failures.push(...inspectText(name,script));
+      }catch{failures.push(name+': bootstrap non coerente');}
+    }else if (name !== 'package-lock.json') failures.push(...inspectText(name, bytes.toString('utf8')));
   }
   if (failures.length) throw new Error(`Controllo repository fallito (valori nascosti):\n${failures.join('\n')}`);
   console.log(`Repository: ${names.size} file controllati, nessun candidato rilevato. La scansione non sostituisce la revisione.`);

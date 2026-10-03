@@ -3,7 +3,9 @@ import { claimInstance } from "./instance.mjs";
 import { openBrowser } from "./browser.mjs";
 import { collectDiagnostics, saveDiagnosticReport, diagnosticSettings, triggerInventory, collectBackupExtras } from "./diagnostics.mjs";
 import { readScriptProject, prepareTriggerPlan } from "./triggers.mjs";
-import { checkUpdates } from "./updates.mjs";
+import { checkUpdates, downloadUpdate } from "./updates.mjs";
+import { stageUpdate, assertCompatible } from "./app-updates.mjs";
+import { closeAppProcesses } from "./app-processes.mjs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -739,6 +741,22 @@ async function handleApi(request, response, pathname) {
   if (pathname === "/api/health" && request.method === "GET") return sendJson(response, 200, { ok: true, app: "GoogleWorkspaceBackup", version: APP_VERSION, instanceId: instance.id, busy: requestBusy || activeJob?.status === "running" });
   if (pathname === "/api/state" && request.method === "GET") return sendJson(response, 200, await publicState());
   if (pathname === "/api/updates" && request.method === "GET") return sendJson(response, 200, await checkUpdates(APP_VERSION));
+  if (pathname === "/api/instances/close" && request.method === "POST") {
+    const payload=await readJson(request);
+    return sendJson(response,200,await closeAppProcesses({protectPid:process.pid,force:payload.force===true}));
+  }
+  if (pathname === "/api/updates/install" && request.method === "POST") {
+    if(process.platform!=="win32" || path.basename(BASE_DIR).toLowerCase()!=="app") throw new Error("Per la prima installazione usa Aggiorna-GWB.cmd dal repository ufficiale.");
+    const root=path.dirname(BASE_DIR), update=await checkUpdates(APP_VERSION);
+    if(!update.available || update.kind!=="zip")throw new Error("Nessun aggiornamento ZIP disponibile.");
+    const staged=await stageUpdate(await downloadUpdate(update.channel),update.channel.sha256);
+    try { await assertCompatible(root,staged.manifest); }catch(error){await fsp.rm(staged.stage,{recursive:true,force:true});throw error;}
+    const executable=path.join(process.env.SystemRoot||"C:\\Windows","System32/WindowsPowerShell/v1.0/powershell.exe");
+    const args=["-NoProfile","-ExecutionPolicy","Bypass","-File",path.join(staged.stage,"UpdateApp.ps1"),"-InstallDirectory",root,"-StageDirectory",staged.stage,"-DataDirectory",DATA_DIR];
+    const child=spawn(executable,args,{detached:true,windowsHide:true,stdio:"ignore",env:{...process.env,GWB_UPDATE_DELAY:"1"}});
+    await new Promise((resolve,reject)=>{child.once("spawn",resolve);child.once("error",reject);});child.unref();
+    return sendJson(response,202,{message:"Aggiornamento avviato. L’app si chiude e si riapre; credenziali e impostazioni vengono conservate."});
+  }
   if (pathname.startsWith('/api/diagnostics/export/') && request.method === 'GET') {
     const file = diagnosticExports.get(pathname.slice('/api/diagnostics/export/'.length));
     if (!file) return sendJson(response, 404, {error:'Esportazione scaduta. Raccogli nuovamente la diagnostica.'});
@@ -1011,6 +1029,7 @@ const server = http.createServer(async (request, response) => {
     if (!checkLocalRequest(request)) return sendJson(response, 403, { error: "Richiesta non autorizzata." });
     const url = new URL(request.url || "/", `http://${request.headers.host}`);
     if (url.pathname.startsWith("/api/")) {
+      if (process.env.GWB_UPDATE_HEALTHCHECK === "1" && !["/api/health", "/api/shutdown"].includes(url.pathname)) return sendJson(response, 409, {error:"Verifica aggiornamento in corso."});
       if (shuttingDown) return sendJson(response, 409, { error: "Chiusura del programma in corso." });
       const authEndpoint = ["/api/auth", "/api/auth/test"].includes(url.pathname);
       if (!["GET", "HEAD"].includes(request.method) && !["/api/job/cancel", "/api/shutdown"].includes(url.pathname) && !authEndpoint) {

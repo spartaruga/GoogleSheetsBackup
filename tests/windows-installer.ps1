@@ -1,6 +1,6 @@
 function Invoke-CloseCheck([string]$Mode, [int]$Expected) {
     $scriptPath = Join-Path $PWD 'installer\CloseApp.ps1'
-    & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $scriptPath -Mode $Mode
+    & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $scriptPath -Mode $Mode -InstallDirectory (Join-Path $PWD 'dist')
     if ($LASTEXITCODE -ne $Expected) { throw "Chiusura installer: $Mode ha restituito $LASTEXITCODE, atteso $Expected." }
 }
 

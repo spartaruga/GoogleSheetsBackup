@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.5.0 — 2026-10-03
+
+- Aggiornamenti applicativi ZIP verificati da SHA-256 e manifest, senza compilare un nuovo EXE e senza Actions. Runtime, dipendenze e profilo esistenti vengono riutilizzati; ripristino automatico se la verifica di avvio fallisce.
+- `Aggiorna-GWB.cmd` migra le installazioni precedenti con un solo file. Se manca il pacchetto iniziale, scarica il Setup 3.4.5 con checksum fissato; da allora si aggiorna dal pulsante nell’app.
+- Chiusura delle istanze precedenti tramite percorso verificato, proprietario, sessione e identità del processo: anche copie senza instance.json e launcher orfani. I server inattivi ricevono una richiesta di chiusura; quelli non responsivi richiedono conferma prima della terminazione forzata. Operazioni note in corso bloccano sempre la chiusura.
+- Pulsante «Chiudi vecchie istanze»; protegge l’istanza corrente e i suoi launcher, senza terminare Node o browser estranei.
+- Workflow Windows esclusivamente manuale. Il canale stabile nel repository distribuisce ZIP racchiusi in JSON testuale e riferiti tramite blob Git immutabile: non è una nuova Release EXE. Le future modifiche a runtime/dipendenze richiedono un nuovo pacchetto iniziale e un collaudo Windows espliciti.
+- Test locali Linux con fixture. Il nuovo bootstrap e gli adattatori Windows richiedono ancora una prova nativa su Windows; non è stata consumata una Action per questo collaudo.
+
 ## 3.4.5 — 2026-10-03
 
 - Il Setup offre «Chiudi l’app e continua» quando la versione precedente è aperta e inattiva. Richiede la chiusura al server locale, attende Node e launcher e prosegue l’aggiornamento; «Annulla aggiornamento» lascia aperta l’app.

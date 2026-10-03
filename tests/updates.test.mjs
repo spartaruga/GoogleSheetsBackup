@@ -6,7 +6,7 @@ test('version comparison is numeric and excludes unreviewed version formats',()=
 });
 test('update check accepts only the official stable installer URL',async()=>{
   const release={tag_name:'v3.4.0',assets:[{name:'GoogleWorkspaceBackup-Setup-3.4.0.exe',browser_download_url:'https://github.com/spartaruga/GoogleSheetsBackup/releases/download/v3.4.0/GoogleWorkspaceBackup-Setup-3.4.0.exe'}]};
-  const fake=async url=>{assert(url.includes('/spartaruga/GoogleSheetsBackup/'));return {ok:true,json:async()=>release};};
+  const fake=async url=>{assert(url.includes('/spartaruga/GoogleSheetsBackup/'));if(url.endsWith('/packages/stable.json'))return {status:404};return {ok:true,json:async()=>release};};
   assert((await checkUpdates('3.3.2',fake)).available);release.assets[0].browser_download_url='https://example.invalid/evil.exe';await assert.rejects(checkUpdates('3.3.2',fake),/ufficiale/);
 });
 test('absence of a Release is reported without an invented download',async()=>{

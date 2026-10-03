@@ -8,8 +8,8 @@
 - Prima di integrare una modifica esegui localmente `npm test`, `npm run self-test`, `npm run check:repo` e `git diff --check`.
 - Non avviare Actions per PR, commit ordinari o controlli già eseguiti. Raggruppa le modifiche prima della release.
 - Incrementa versione e lockfile solo quando prepari una nuova release. Aggiorna il changelog nello stesso commit.
-- Un cambiamento di `package.json` su `main` avvia il collaudo Windows e una singola pubblicazione. Per riprendere una pubblicazione fallita, rilancia solo il job fallito.
-- Il Setup deve funzionare senza Node globale. Mantieni il collaudo Windows prima della pubblicazione.
+- Nessun push, tag o PR avvia Actions. Il workflow Windows e solo manuale. Pubblica gli aggiornamenti applicativi con `npm run update:package` e il canale `packages/stable.json`, dopo i controlli locali.
+- Il Setup iniziale deve funzionare senza Node globale. Per modifiche a runtime, dipendenze o launcher EXE serve una nuova build e un collaudo Windows espliciti. Distingui sempre un pacchetto applicativo da un nuovo installer collaudato.
 - Mantieni cache npm, conservazione breve degli artefatti temporanei e checksum. Gli installer finali sono nelle Release.
 - Non sostituire una release già pubblicata né spostarne il tag su un altro commit.
 - Usa fixture e API simulate nei test. Non inserire credenziali, token o backup reali nel repository o nei log CI.

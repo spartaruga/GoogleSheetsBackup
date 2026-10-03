@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 export const runtime = JSON.parse(fs.readFileSync(path.join(root, 'scripts/runtime.json'), 'utf8'));
-export const sourceRoots = ['.gitignore', '.github', 'package.json', 'package-lock.json', 'server.mjs', 'engine.mjs', 'oauth.mjs', 'browser.mjs', 'instance.mjs', 'diagnostics.mjs', 'triggers.mjs', 'updates.mjs', 'public', 'launcher.ps1', 'Avvia.vbs', 'Avvia_visibile.bat', 'Diagnostica.bat', 'installer', 'scripts', 'tests', 'README.md', 'SECURITY.md', 'CHANGELOG.md', ...(fs.existsSync(path.join(root, 'LICENSE')) ? ['LICENSE'] : ['LICENSE-TODO.md']), 'LEGGIMI.txt', 'NOTE_VERSIONE.txt', 'docs'];
+export const sourceRoots = ['.gitignore', '.github', 'package.json', 'package-lock.json', 'server.mjs', 'engine.mjs', 'oauth.mjs', 'browser.mjs', 'instance.mjs', 'diagnostics.mjs', 'triggers.mjs', 'updates.mjs', 'app-updates.mjs', 'app-processes.mjs', 'update-worker.mjs', 'Aggiorna-GWB.cmd', 'public', 'launcher.ps1', 'Avvia.vbs', 'Avvia_visibile.bat', 'Diagnostica.bat', 'installer', 'scripts', 'tests', 'README.md', 'SECURITY.md', 'CHANGELOG.md', ...(fs.existsSync(path.join(root, 'LICENSE')) ? ['LICENSE'] : ['LICENSE-TODO.md']), 'LEGGIMI.txt', 'NOTE_VERSIONE.txt', 'docs'];
 export function run(command, args, cwd = root) {
   const result = spawnSync(command, args, { cwd, stdio: 'inherit', windowsHide: true, shell: false });
   if (result.error) throw result.error;

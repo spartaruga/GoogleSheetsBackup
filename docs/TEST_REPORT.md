@@ -1,5 +1,15 @@
 # Verifiche
 
+## Versione applicativa 3.5.0 — 2026-10-03
+
+- Linux, Node 24.19.0: 60 test Node superati, self-test OK, controllo repository e diff whitespace superati. Nessuna chiamata Google autenticata.
+- Test nuovi: riconoscimento delle sole istanze GWB del proprietario/sessione corretti; protezione del processo corrente, PID riutilizzati, Node e browser estranei; chiusura normale, launcher e cmd orfani, richiesta esplicita di force per server non responsivi, blocco delle operazioni attive anche con force; lock estranei e corrotti conservati.
+- Pacchetto: identità del blob Git, SHA-256 ZIP, manifest e hash di tutti i file; rifiuto di traversal e dimensioni incoerenti. Nessun runtime, node_modules o profilo incluso.
+- Installazione simulata su filesystem reale: conservazione dei file privati e delle dipendenze, rollback per mancato avvio e per errori durante le rinomine, recupero di un journal interrotto e successivo aggiornamento.
+- Avvio reale del server come figlio del verifier: health/versione/identità coerenti, API di modifica bloccate durante la verifica, shutdown del solo figlio e profilo invariato.
+- Nessuna build Windows e nessuna Action avviata per 3.5.0. Bootstrap CMD, PowerShell/CIM, aggiornamento nativo e UI del nuovo flusso non collaudati su Windows in questa sessione. I precedenti risultati Windows 3.4.5 sotto non certificano questo nuovo flusso.
+- Distribuzione tramite canale Git del repository, distinta dalle Release EXE. L’installer iniziale resta la Release 3.4.5 con hash fissato. Il workflow completo Windows resta disponibile solo su richiesta manuale.
+
 ## Versione 3.4.5 — 2026-10-03
 
 - Modifica circoscritta al Setup: dialogo di chiusura e helper PowerShell incluso nell’installer. Nessuna modifica alle API Google, al backend o al formato dei dati personali.

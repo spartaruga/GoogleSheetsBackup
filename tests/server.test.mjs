@@ -152,3 +152,17 @@ test('pending OAuth exposes a fallback link and disconnect cancels and cleans it
   await assert.rejects(fs.access(path.join(directory, 'token.json.tmp')));
   await stop(app);
 });
+
+test('update health-check startup forbids mutations and leaves profile unchanged',async t=>{
+  const directory=await temporary(t),state={version:3,projects:[],history:[],sentinel:'keep-update'};
+  await fs.writeFile(path.join(directory,'state.json'),JSON.stringify(state));
+  const child=spawn(process.execPath,['server.mjs'],{cwd:root,env:{...process.env,GWB_DATA_DIR:directory,GWB_PORT:'0',GWB_NO_BROWSER:'1',GWB_UPDATE_HEALTHCHECK:'1'},stdio:'ignore'});
+  t.after(()=>{if(child.exitCode===null)child.kill('SIGKILL');});
+  let record;
+  for(let i=0;i<150;i++){try{record=JSON.parse(await fs.readFile(path.join(directory,'instance.json')));if(record.pid===child.pid)break;}catch{}await new Promise(resolve=>setTimeout(resolve,40));}
+  assert.equal(record?.pid,child.pid);const url=`http://127.0.0.1:${record.port}`;
+  assert.equal((await fetch(url+'/api/health')).status,200);
+  assert.equal((await fetch(url+'/api/state',{method:'POST',headers,body:'{}'})).status,409);
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(directory,'state.json'))),state);
+  const closed=once(child,'exit');assert.equal((await fetch(url+'/api/shutdown',{method:'POST',headers})).status,200);await closed;
+});

@@ -4,11 +4,12 @@ Programma Windows per salvare Fogli Google e progetti Apps Script sul proprio PC
 
 ## Installazione per chi deve usare il programma
 
-1. Apri la [Release più recente](https://github.com/spartaruga/GoogleSheetsBackup/releases/latest) e scarica **solo `GoogleWorkspaceBackup-Setup-X.Y.Z.exe`**. Il file `.sha256` serve se vuoi verificare il download.
-2. Avvia l'installer e premi **Avanti → Installa**. Il collegamento Desktop è facoltativo.
-3. Apri **Google Workspace Backup** dal menu Start.
-4. Completa la configurazione Google qui sotto.
+1. Scarica [Aggiorna-GWB.cmd](https://github.com/spartaruga/GoogleSheetsBackup/raw/refs/heads/main/Aggiorna-GWB.cmd) e aprilo su Windows.
+2. Il file riutilizza l’installazione esistente oppure installa il pacchetto iniziale verificato e applica il ZIP stabile. Se una vecchia istanza è bloccata, chiede conferma prima di forzarla.
+3. Apri **Google Workspace Backup** dal menu Start e verifica la versione nell’app.
+4. Alla prima installazione completa la configurazione Google qui sotto. Durante un aggiornamento ID, credenziali e preferenze sono conservati.
 
+Il [Setup nelle Release](https://github.com/spartaruga/GoogleSheetsBackup/releases/latest) resta disponibile come pacchetto iniziale alternativo.
 L'installer include Node.js privato e tutte le dipendenze. Il PC dell'utilizzatore non deve avere Node.js o npm. Non modifica PATH e non richiede normalmente privilegi amministrativi. Target: Windows 10/11 x64. Windows ARM e altri sistemi non sono target collaudati di questa distribuzione.
 
 **Questo ZIP è il progetto sorgente**, non un installer compilato: per ottenere il Setup usa la procedura GitHub Actions o la build Windows descritta sotto. Non rinominare lo ZIP in `.exe`.
@@ -140,13 +141,13 @@ Su Windows il token è cifrato con DPAPI per l'utente corrente. Il JSON OAuth e 
 
 ## Aggiornamento e disinstallazione
 
-1. Premi **Controlla aggiornamenti** per aprire la Release ufficiale e scarica il nuovo Setup.
-2. Installa nella stessa cartella. Se l’app è aperta, premi **Chiudi l’app e continua** nella finestra del Setup: la chiusura usa il comando normale dell’app e attende anche il launcher. Puoi scegliere **Annulla aggiornamento** e lasciare l’app aperta.
-3. Riapri e verifica versione, account, progetti e storico.
+1. Per migrare una versione precedente alla 3.5.0, apri una volta **Aggiorna-GWB.cmd**. Da 3.5.0 premi **Controlla aggiornamenti** e conferma l’installazione del ZIP.
+2. L’updater chiude le istanze verificate, sostituisce il codice, controlla l’avvio e riapre l’app. Una mancata verifica ripristina la versione precedente.
+3. Verifica versione, account, progetti e storico. Puoi usare **Chiudi vecchie istanze** per altre copie aperte o launcher orfani.
 
-Il Setup aggiorna i file applicativi e mantiene i dati nel profilo e i backup. Non copia automaticamente dati da cartelle non standard. Non usare la cartella d'installazione come destinazione backup.
+Un backup o una pubblicazione noti in corso bloccano la chiusura: attendi oppure annulla il backup e riprova. Un server non responsivo richiede conferma prima di forzarlo; un PID estraneo o un lock corrotto non autorizza alcuna terminazione. Il comando riguarda l’app Windows, non le esecuzioni Apps Script su Google.
 
-Se un backup o una pubblicazione è in corso, il Setup si ferma: aspetta il termine oppure annulla il backup dall’app e riprova. Un processo che non risponde o un blocco locale non verificabile richiede la chiusura manuale; il Setup non forza processi. Le installazioni silenziose si fermano quando l’app è aperta, senza chiuderla automaticamente. Il comando riguarda l’app Windows, non le esecuzioni Apps Script su Google.
+Il Setup 3.4.5 già pubblicato conserva il vecchio pulsante incorporato: la correzione è distribuita nel nuovo bootstrap e nell’app. Il profilo e i backup restano esterni alla sostituzione. Non usare la cartella d’installazione come destinazione backup.
 
 Per disinstallare: **Impostazioni Windows → App → App installate → Google Workspace Backup → Disinstalla**. Il programma e i collegamenti vengono rimossi; profilo e backup restano. Per rimuovere anche i dati, prima salva ciò che ti serve, scollega/revoca Google e rimuovi manualmente le sole cartelle personali indicate sopra. L'app non le cancella durante la disinstallazione.
 
@@ -193,9 +194,17 @@ La build scarica il runtime ufficiale e verifica uno SHA-256 fissato nel progett
 
 Per provare solo il sorgente: dopo `npm ci --ignore-scripts`, esegui `npm start` o `Avvia.vbs`. Solo in questa modalità il launcher può usare Node globale; non installa componenti al primo avvio.
 
-**Senza preparare un PC di build:** il workflow **Windows build** compila e prova il Setup soltanto quando cambia `package.json` su `main`, normalmente al rilascio di una nuova versione. PR, commit ordinari e creazione dei tag non avviano Actions. Da **Run workflow** puoi scegliere se pubblicare o produrre solo l’artefatto `GoogleWorkspaceBackup-release`. Gli artefatti temporanei durano 3 giorni; EXE, sorgenti e checksum finali restano nelle Release. La cache npm è mantenuta e gli archivi già compressi non vengono ricompressi durante l’upload.
+**Build Windows facoltativa:** il workflow **Windows build** parte esclusivamente da **Run workflow**. Push, cambi versione, PR e tag non avviano Actions. Gli aggiornamenti applicativi usano `npm run update:package` e il canale del repository senza compilare un nuovo installer. Da **Run workflow** puoi scegliere se pubblicare o produrre solo l’artefatto `GoogleWorkspaceBackup-release`. Gli artefatti temporanei durano 3 giorni; EXE, sorgenti e checksum finali restano nelle Release. La cache npm è mantenuta e gli archivi già compressi non vengono ricompressi durante l’upload.
 
-## Pubblica su GitHub e crea una Release
+## Aggiornamento senza Actions
+
+Scarica [Aggiorna-GWB.cmd](https://github.com/spartaruga/GoogleSheetsBackup/raw/refs/heads/main/Aggiorna-GWB.cmd), salvalo come `.cmd` e aprilo su Windows. Migra anche la versione precedente rimasta aperta; chiede conferma prima di forzare istanze non responsive e blocca quelle con operazioni note in corso. Non occorre reinserire ID o credenziali. Dopo la migrazione usa **Controlla aggiornamenti** nell’app.
+
+Gli aggiornamenti ZIP riutilizzano runtime, launcher EXE e dipendenze della prima installazione. Il programma verifica hash e manifest, conserva i file precedenti e ripristina automaticamente se la prova di avvio fallisce. Il profilo in `%APPDATA%\GoogleWorkspaceBackup` resta esterno alla sostituzione. **Chiudi vecchie istanze** chiude solo altre istanze verificate del programma; se una è bloccata richiede conferma.
+
+Il canale `packages/stable.json` nel repository distribuisce la versione applicativa, distinta dalle Release EXE. L’installer iniziale resta 3.4.5: la versione in Windows «App installate» può quindi restare 3.4.5 mentre l’app mostra 3.5.0. Modifiche a dipendenze, runtime o launcher compilato richiedono una nuova build completa esplicita.
+
+## Pubblica su GitHub e crea una Release completa (facoltativa)
 
 1. Prima di rendere pubblico il progetto, leggi `SECURITY.md` e scegli la licenza indicata in `LICENSE-TODO.md`.
 2. Crea un repository vuoto. Estrai lo ZIP sorgente in una cartella dedicata, senza profili o backup.
@@ -213,13 +222,13 @@ git commit -m "Prepare Windows distribution"
 4. Aggiungi come `origin` l'URL del tuo repository usando il comando mostrato da GitHub e fai `git push -u origin main`.
 5. Abilita Secret Scanning/push protection dove disponibili e Private vulnerability reporting nelle impostazioni del repository.
 6. Raggruppa le modifiche e completa i controlli locali prima di preparare la release.
-7. Incrementa la versione in `package.json` e lockfile, aggiungi le note in `CHANGELOG.md` e integra la modifica su `main`: parte un solo workflow Windows.
+7. Per un aggiornamento applicativo incrementa versione e lockfile, aggiorna il changelog, esegui i controlli locali e `npm run update:package`. Pubblica il pacchetto testuale versionato e promuovilo nel canale stabile come descritto in `docs/UPDATE_PLAN.md`. Nessuna Action parte automaticamente.
 8. Leggi l'esito; non distribuire build con test falliti. Per un collaudo Google reale usa una VM Windows e un progetto di prova. Per riprendere una pubblicazione fallita rilancia solo il job Release, riutilizzando l’installer già verificato.
 9. Il job Release crea il tag sul commit verificato, allega EXE/ZIP e checksum, controlla dimensioni e digest e pubblica la Release. Non sovrascrive una versione appartenente a un altro commit. Il login Google reale resta un controllo da fare con il tuo account e un progetto di prova.
 
 Per un avvio esplicito usa **Actions → Windows build → Run workflow**. Il job Release crea il tag: non occorre inviarne uno per ricompilare il programma. [Guida ufficiale GitHub alle Release](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository).
 
-Le indicazioni pertinenti di [Awesome Copilot](https://github.com/github/awesome-copilot) sono raccolte in `.github/copilot-instructions.md`: modifiche piccole, test locali, una build per release, dati non attendibili trattati come dati e protezione dei segreti. Le guide complete non vengono copiate nel progetto né aggiungono servizi AI al programma.
+Le indicazioni pertinenti di [Awesome Copilot](https://github.com/github/awesome-copilot) sono raccolte in `.github/copilot-instructions.md`: modifiche piccole, test locali, aggiornamenti ZIP senza build, dati non attendibili trattati come dati e protezione dei segreti. Le guide complete non vengono copiate nel progetto né aggiungono servizi AI al programma.
 
 Per la prossima versione usa `npm version patch --no-git-tag-version`, aggiorna il changelog e ripeti i controlli. La versione eseguibile deriva da `package.json`; i riferimenti storici nella documentazione restano storici.
 
@@ -233,4 +242,4 @@ Confronta il risultato con il file `.sha256`. Il checksum rileva alterazioni; no
 
 ## Stato dei collaudi
 
-Leggi `docs/TEST_REPORT.md`: distingue test eseguiti localmente, test Windows predisposti e verifiche Google reali ancora da fare. Non ci sono credenziali reali nel progetto. Piano Chrome in `docs/CHROME_EXTENSION_PLAN.md`; aggiornamenti futuri in `docs/UPDATE_PLAN.md`.
+Leggi `docs/TEST_REPORT.md`: distingue test eseguiti localmente, test Windows predisposti e verifiche Google reali ancora da fare. Non ci sono credenziali reali nel progetto. Piano Chrome in `docs/CHROME_EXTENSION_PLAN.md`; aggiornamenti ZIP in `docs/UPDATE_PLAN.md`.

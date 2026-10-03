@@ -1,3 +1,8 @@
+Novita 3.5.0: aggiornamenti applicativi ZIP senza Actions.
+Apri Aggiorna-GWB.cmd una volta per migrare; poi usa Controlla aggiornamenti.
+Il profilo esistente viene conservato. Chiusura forzata solo di istanze GWB verificate, previa conferma.
+Il nuovo flusso Windows non e ancora stato provato nativamente; test della logica eseguiti su Linux.
+
 NOTE STORICHE — Le istruzioni correnti sono in README.md.
 Per la nuova distribuzione vedi CHANGELOG.md.
 Le indicazioni dei vecchi launcher/permessi non si applicano alla versione corrente.
