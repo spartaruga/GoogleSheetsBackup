@@ -24,7 +24,7 @@ export async function writeBootstrap() {
   const head=['@echo off','setlocal','set "GWB_BOOTSTRAP_FILE=%~f0"',`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$s=[IO.File]::ReadAllText($env:GWB_BOOTSTRAP_FILE);$b=$s.Substring($s.IndexOf('# GWB_PAYLOAD_BEGIN')+19).Trim();& ([ScriptBlock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b))))"`,'if errorlevel 1 pause','exit /b','# GWB_PAYLOAD_BEGIN'];
   // The marker occurs inside the command too. Use LastIndexOf to select tail.
   head[3]=head[3].replace('IndexOf','LastIndexOf');
-  await fs.writeFile(path.join(root,'Aggiorna-GWB.cmd'),head.join('\r\n')+'\r\n'+Buffer.from(script).toString('base64')+'\r\n');
+  await fs.writeFile(path.join(root,'Aggiorna-GWB.cmd'),head.join('\n')+'\n'+Buffer.from(script).toString('base64')+'\n');
 }
 if(process.argv[1] && path.resolve(process.argv[1])===path.join(root,'scripts/update-package.mjs')) {
   await writeBootstrap();const result=await createUpdatePackage();

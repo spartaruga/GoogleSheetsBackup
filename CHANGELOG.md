@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.5.1 — 2026-10-03
+
+- Corretto il blocco dell’updater quando un PID precedente è stato riutilizzato: confronta l’avvio del processo con la data del lock e archivia solo un lock certamente obsoleto e il suo record corrispondente. Non termina il nuovo processo e conserva profilo e record.
+- Chiusura tramite handshake dell’istanza registrata anche per avvii npm con percorso relativo, oltre alla ricerca delle copie installate. Verifica proprietario, sessione, PID della porta e instanceId; le operazioni note in corso impediscono anche force.
+- Corretto il passaggio del profilo con `--force`, che prima poteva diventare il percorso del profilo. Errori controllati su stdout JSON e codifica UTF-8 esplicita per evitare l’interruzione prematura di PowerShell 5.1 su stderr.
+- L’errore del lock ora riporta PID e nome del processo per poter diagnosticare un caso ancora bloccato. Nessuna Action o build Windows automatica.
+
 ## 3.5.0 — 2026-10-03
 
 - Aggiornamenti applicativi ZIP verificati da SHA-256 e manifest, senza compilare un nuovo EXE e senza Actions. Runtime, dipendenze e profilo esistenti vengono riutilizzati; ripristino automatico se la verifica di avvio fallisce.

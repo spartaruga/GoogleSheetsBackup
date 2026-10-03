@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
+import crypto from 'node:crypto';
 const exec = promisify(execFile);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const normalized = value => path.win32.normalize(String(value || '')).toLowerCase();
@@ -103,7 +104,11 @@ export async function classifyProcesses(snapshot, {verifyRoot=verifiedRoot,prote
 export const windowsAdapter = {
   async snapshot() {
     if(process.platform!=='win32')throw new Error('Chiusura delle altre istanze disponibile su Windows.');
-    return powershell(`$ErrorActionPreference='Stop'; $me=Get-CimInstance Win32_Process -Filter 'ProcessId=${process.pid}'; $sid=(Invoke-CimMethod -InputObject $me -MethodName GetOwnerSid).Sid; $rows=@(Get-CimInstance Win32_Process | Where-Object { $_.SessionId -eq $me.SessionId -and $_.Name -match '^(node|GoogleWorkspaceBackup|powershell|pwsh|cmd)\\.exe$' } | ForEach-Object { $o=(Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid -ErrorAction SilentlyContinue).Sid; [pscustomobject]@{pid=[int]$_.ProcessId;parent=[int]$_.ParentProcessId;session=[int]$_.SessionId;owner=$o;name=$_.Name;executable=$_.ExecutablePath;command=$_.CommandLine;created=$_.CreationDate.ToUniversalTime().ToString('o')} }); @{owner=$sid;session=[int]$me.SessionId;processes=$rows} | ConvertTo-Json -Depth 5 -Compress`);
+    return powershell(`$ErrorActionPreference='Stop'; $me=Get-CimInstance Win32_Process -Filter 'ProcessId=${process.pid}'; $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value; $rows=@(Get-CimInstance Win32_Process | Where-Object { $_.SessionId -eq $me.SessionId -and $_.Name -match '^(node|GoogleWorkspaceBackup|powershell|pwsh|cmd)\\.exe$' } | ForEach-Object { $o=(Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid -ErrorAction SilentlyContinue).Sid; [pscustomobject]@{pid=[int]$_.ProcessId;parent=[int]$_.ParentProcessId;session=[int]$_.SessionId;owner=$o;name=$_.Name;executable=$_.ExecutablePath;command=$_.CommandLine;created=$_.CreationDate.ToUniversalTime().ToString('o')} }); @{owner=$sid;session=[int]$me.SessionId;processes=$rows} | ConvertTo-Json -Depth 5 -Compress`);
+  },
+  async processInfo(pid) {
+    if(!Number.isInteger(pid)||pid<1)throw new Error('PID non valido.');
+    return powershell(`$ErrorActionPreference='Stop'; $p=Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}'; if(-not $p){'null';exit}; @{pid=[int]$p.ProcessId;name=$p.Name;created=$p.CreationDate.ToUniversalTime().ToString('o')} | ConvertTo-Json -Compress`);
   },
   async ports(p) {
     return (await powershell(`$ErrorActionPreference='Stop'; @(Get-NetTCPConnection -State Listen -OwningProcess ${p.pid} -ErrorAction SilentlyContinue | Where-Object { $_.LocalAddress -eq '127.0.0.1' } | Select-Object -ExpandProperty LocalPort -Unique) | ConvertTo-Json -Compress`)) || [];
@@ -124,26 +129,79 @@ export const windowsAdapter = {
   sleep,
 };
 const identity = p => JSON.stringify([p.pid,p.created,p.executable,p.command,p.owner,p.session]);
-export async function verifyProfileLock(directory) {
+function processAlive(pid) {try{process.kill(pid,0);return true;}catch(error){return error.code!=='ESRCH';}}
+export async function verifyProfileLock(directory,{recoverStale=false,adapter=windowsAdapter,isAlive=processAlive}={}) {
+  const lockPath=path.join(directory,'instance.lock');
   let text;
-  try {text=await fs.readFile(path.join(directory,'instance.lock'),'utf8');}catch(error){if(error.code==='ENOENT')return;throw error;}
+  try {text=await fs.readFile(lockPath,'utf8');}catch(error){if(error.code==='ENOENT')return;throw error;}
   let lock;
   try {lock=JSON.parse(text.replace(/^\uFEFF/,''));}catch{throw new Error('Blocco locale non leggibile: i dati sono conservati. Controlla instance.lock prima di aggiornare.');}
   if(!Number.isInteger(lock.pid)||lock.pid<1||!lock.id)throw new Error('Blocco locale non valido; nessun processo estraneo verrà terminato.');
-  try {process.kill(lock.pid,0);}catch(error){if(error.code==='ESRCH')return;}
-  // A live PID without a verified app command is never a target. A dead
-  // lock is left intact; claimInstance performs serialized recovery later.
-  throw new Error('Il profilo è ancora bloccato da un processo attivo o non verificabile. Nessun processo estraneo è stato terminato.');
+  if(!await isAlive(lock.pid))return;
+  let info;
+  if(recoverStale) {
+    info=await adapter.processInfo(lock.pid);
+    const stat=await fs.stat(lockPath),created=Date.parse(info?.created);
+    // A process born AFTER the lock cannot own that lock. Archive only
+    // this proven PID-reuse case; never terminate the replacement process.
+    if(info?.pid===lock.pid&&Number.isFinite(created)&&created>stat.mtimeMs+2000) {
+      const recovery=await fs.open(lockPath+'.recovery','wx',0o600);
+      try {
+        if(await fs.readFile(lockPath,'utf8')!==text || (await fs.stat(lockPath)).mtimeMs!==stat.mtimeMs)throw new Error('Il blocco del profilo è cambiato. Riprova.');
+        const recordPath=path.join(directory,'instance.json');
+        let previousRecord;
+        try {previousRecord=JSON.parse((await fs.readFile(recordPath,'utf8')).replace(/^\uFEFF/,''));}catch(error){if(error.code!=='ENOENT')throw new Error('Record del profilo non leggibile; file conservati.');}
+        if(previousRecord&&(previousRecord.pid!==lock.pid||previousRecord.instanceId!==lock.id))throw new Error('Il record istanza non coincide con il blocco; file conservati.');
+        const archived=lockPath+'.stale-'+crypto.randomUUID();
+        await fs.rename(lockPath,archived);
+        // Reserve the profile while archiving its matching stale record.
+        // This also lets the older base Setup handle a first installation.
+        const guardId=crypto.randomUUID(),guard=await fs.open(lockPath,'wx',0o600);
+        try {
+          await guard.writeFile(JSON.stringify({pid:process.pid,id:guardId}));
+          let record;
+          try {record=JSON.parse((await fs.readFile(recordPath,'utf8')).replace(/^\uFEFF/,''));}catch{}
+          if(record?.pid===lock.pid&&record.instanceId===lock.id)await fs.rename(recordPath,recordPath+'.stale-'+guardId);
+        }finally{
+          await guard.close();
+          if(JSON.parse(await fs.readFile(lockPath,'utf8')).id===guardId)await fs.unlink(lockPath);
+        }
+        return {staleLockArchived:true};
+      }finally{await recovery.close();await fs.unlink(lockPath+'.recovery');}
+    }
+    if(!await isAlive(lock.pid))return;
+  }
+  const error=new Error(`Il profilo è ancora bloccato. PID ${lock.pid}${info?.name?' ('+info.name+')':''}: istanza attiva o non verificabile. Nessun processo estraneo è stato terminato.`);
+  error.code='PROFILE_LOCK_LIVE';error.diagnostic={pid:lock.pid,processName:info?.name||'non verificato'};throw error;
 }
-export async function closeAppProcesses({adapter=windowsAdapter,force=false,protectPid=0,checkOnly=false,verifyRoot=verifiedRoot,waitMs=15000}={}) {
-  const candidates=await classifyProcesses(await adapter.snapshot(),{verifyRoot,protectPid});
+async function registeredCandidate(directory,snapshot,adapter,protectPid) {
+  if(!directory)return null;
+  let lock,record;
+  try {lock=JSON.parse((await fs.readFile(path.join(directory,'instance.lock'),'utf8')).replace(/^\uFEFF/,''));record=JSON.parse((await fs.readFile(path.join(directory,'instance.json'),'utf8')).replace(/^\uFEFF/,''));}catch{return null;}
+  if(!Number.isInteger(lock.pid)||lock.pid===protectPid||record.pid!==lock.pid||!lock.id||record.instanceId!==lock.id||record.app!=='GoogleWorkspaceBackup')return null;
+  const p=snapshot.processes.find(p=>p.pid===lock.pid&&p.owner===snapshot.owner&&p.session===snapshot.session&&/^node\.exe$/i.test(p.name)&&p.command&&p.executable);
+  if(!p)return null;
+  // A legacy npm launch can use a relative server.mjs. The authenticated
+  // local handshake and owning TCP PID verify it without trusting its cwd.
+  const args=windowsArgs(p.command);
+  if(!args[1]||path.win32.basename(args[1]).toLowerCase()!=='server.mjs')return null;
+  const ports=await adapter.ports(p);
+  if(!(Array.isArray(ports)?ports:[ports]).includes(record.port))return null;
+  try {const health=await adapter.health(record.port);if(health.app!=='GoogleWorkspaceBackup'||health.instanceId!==lock.id)return null;return {...p,kind:'server',instanceId:lock.id,reportedBusy:health.busy===true};}catch{return null;}
+}
+export async function closeAppProcesses({adapter=windowsAdapter,force=false,protectPid=0,checkOnly=false,verifyRoot=verifiedRoot,waitMs=15000,profileDirectory}={}) {
+  const snapshot=await adapter.snapshot();
+  const candidates=await classifyProcesses(snapshot,{verifyRoot,protectPid});
+  const registered=await registeredCandidate(profileDirectory,snapshot,adapter,protectPid);
+  if(registered) {const existing=candidates.find(p=>p.pid===registered.pid);if(existing)Object.assign(existing,{instanceId:registered.instanceId,reportedBusy:registered.reportedBusy});else candidates.push(registered);}
   const servers=candidates.filter(p=>p.kind==='server'), reachable=new Map(), busy=[];
   // Preflight all servers before closing any: known active work always blocks.
   for(const p of servers) {
+    if(p.reportedBusy)busy.push(p.pid);
     const ports=await adapter.ports(p);
     for(const port of Array.isArray(ports)?ports:[ports]) {
       if(!Number.isInteger(port)||port<1||port>65535)continue;
-      try {const health=await adapter.health(port);if(health.app!=='GoogleWorkspaceBackup')continue;if(health.busy)busy.push(p.pid);reachable.set(p.pid,port);break;}catch{}
+      try {const health=await adapter.health(port);if(health.app!=='GoogleWorkspaceBackup'||(p.instanceId&&health.instanceId!==p.instanceId))continue;if(health.busy)busy.push(p.pid);reachable.set(p.pid,port);break;}catch{}
     }
   }
   const report={count:candidates.length,servers:servers.length,busy,needsForce:[],closed:0};
@@ -184,8 +242,9 @@ export async function closeAppProcesses({adapter=windowsAdapter,force=false,prot
 
 if(process.argv[1] && path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
   try {
-    const result=await closeAppProcesses({checkOnly:process.argv.includes('--check'),force:process.argv.includes('--force')});
-    if(!result.busy.length&&!result.needsForce.length && (!process.argv.includes('--check')||!result.count))await verifyProfileLock(path.join(process.env.APPDATA,'GoogleWorkspaceBackup'));
+    const directory=path.join(process.env.APPDATA,'GoogleWorkspaceBackup');
+    const result=await closeAppProcesses({checkOnly:process.argv.includes('--check'),force:process.argv.includes('--force'),profileDirectory:directory});
+    if(!result.busy.length&&!result.needsForce.length && (!process.argv.includes('--check')||!result.count))await verifyProfileLock(directory,{recoverStale:!process.argv.includes('--check')});
     console.log(JSON.stringify(result));process.exitCode=result.busy.length?2:result.needsForce.length?3:process.argv.includes('--check')&&result.count?1:0;
-  }catch(error){console.error(error.message);process.exitCode=4;}
+  }catch(error){console.log(JSON.stringify({error:error.message,code:error.code,diagnostic:error.diagnostic}));process.exitCode=4;}
 }

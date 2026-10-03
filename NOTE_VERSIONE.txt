@@ -1,3 +1,6 @@
+Hotfix 3.5.1: chiusura dell’istanza registrata e recupero verificato dei PID riutilizzati.
+Profilo, credenziali e processi estranei restano conservati.
+
 Novita 3.5.0: aggiornamenti applicativi ZIP senza Actions.
 Apri Aggiorna-GWB.cmd una volta per migrare; poi usa Controlla aggiornamenti.
 Il profilo esistente viene conservato. Chiusura forzata solo di istanze GWB verificate, previa conferma.

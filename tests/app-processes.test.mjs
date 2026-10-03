@@ -51,3 +51,57 @@ test('a foreign live lock and a corrupt lock never authorize termination or dele
   await fs.writeFile(file,'{broken');await assert.rejects(verifyProfileLock(directory),/non leggibile/);assert.equal(await fs.readFile(file,'utf8'),'{broken');
   await fs.writeFile(file,JSON.stringify({pid:2147483647,id:'stale'}));await verifyProfileLock(directory);assert(await fs.readFile(file,'utf8'));
 });
+
+async function registeredProfile(t,pid=11) {
+  const fs=await import('node:fs/promises'),path=await import('node:path'),{temporary}=await import('./helpers.mjs');
+  const directory=await temporary(t);
+  await fs.writeFile(path.join(directory,'instance.lock'),JSON.stringify({pid,id:'old-instance'}));
+  await fs.writeFile(path.join(directory,'instance.json'),JSON.stringify({app:'GoogleWorkspaceBackup',pid,instanceId:'old-instance',port:12345}));
+  await fs.writeFile(path.join(directory,'state.json'),'keep profile');return directory;
+}
+test('registered relative npm server closes through its verified handshake even when root discovery misses it',async t=>{
+  const directory=await registeredProfile(t),relative={...server,command:'node.exe server.mjs',parent:0};
+  const fake=adapter([relative]);fake.health=async()=>({app:'GoogleWorkspaceBackup',instanceId:'old-instance',busy:false});
+  const report=await closeAppProcesses({adapter:fake,profileDirectory:directory,verifyRoot:async()=>false,waitMs:0});
+  assert.equal(report.closed,1);assert.deepEqual(fake.requested,[11]);assert.equal(fake.stopped.length,0);
+});
+test('a registered busy instance cannot be forced if the second health request stops responding',async t=>{
+  const directory=await registeredProfile(t),relative={...server,command:'node.exe server.mjs',parent:0};
+  const fake=adapter([relative]);let calls=0;
+  fake.health=async()=>{if(calls++)throw new Error('health now unavailable');return {app:'GoogleWorkspaceBackup',instanceId:'old-instance',busy:true};};
+  const report=await closeAppProcesses({adapter:fake,profileDirectory:directory,verifyRoot:async()=>false,force:true,waitMs:0});
+  assert(report.busy.includes(11));assert.equal(fake.requested.length,0);assert.equal(fake.stopped.length,0);
+});
+test('wrong handshake, different owner, reused port or protected PID never authorize registered shutdown',async t=>{
+  const directory=await registeredProfile(t),relative={...server,command:'node.exe server.mjs',parent:0};
+  for(const mode of ['wrong-id','different-owner','wrong-port','protected']) {
+    const row=mode==='different-owner'?{...relative,owner:'other'}:relative;
+    const fake=adapter([row]);fake.health=async()=>({app:'GoogleWorkspaceBackup',instanceId:mode==='wrong-id'?'another-instance':'old-instance',busy:false});
+    if(mode==='wrong-port')fake.ports=async()=>[54321];
+    const report=await closeAppProcesses({adapter:fake,profileDirectory:directory,verifyRoot:async()=>false,protectPid:mode==='protected'?11:0,force:true,waitMs:0});
+    assert.equal(report.count,0);assert.equal(fake.requested.length,0);assert.equal(fake.stopped.length,0);
+  }
+});
+test('proven PID reuse archives the matching lock and record and preserves credentials and state',async t=>{
+  const fs=await import('node:fs/promises'),path=await import('node:path'),{verifyProfileLock}=await import('../app-processes.mjs');
+  const directory=await registeredProfile(t,44),lock=await fs.readFile(path.join(directory,'instance.lock'),'utf8');
+  await fs.writeFile(path.join(directory,'credentials.json'),'keep credentials');
+  const fake={processInfo:async()=>({pid:44,name:'unrelated.exe',created:new Date(Date.now()+5000).toISOString()})};
+  const report=await verifyProfileLock(directory,{recoverStale:true,adapter:fake,isAlive:async()=>true});
+  assert.equal(report.staleLockArchived,true);
+  const archive=(await fs.readdir(directory)).find(name=>name.startsWith('instance.lock.stale-'));
+  assert.equal(await fs.readFile(path.join(directory,archive),'utf8'),lock);
+  assert.equal(await fs.readFile(path.join(directory,'state.json'),'utf8'),'keep profile');
+  assert.equal(await fs.readFile(path.join(directory,'credentials.json'),'utf8'),'keep credentials');
+  const recordArchive=(await fs.readdir(directory)).find(name=>name.startsWith('instance.json.stale-'));
+  assert.equal(JSON.parse(await fs.readFile(path.join(directory,recordArchive),'utf8')).instanceId,'old-instance');
+});
+test('an old live process, unreadable process identity or lock changed during recovery blocks archive',async t=>{
+  const fs=await import('node:fs/promises'),path=await import('node:path'),{verifyProfileLock}=await import('../app-processes.mjs');
+  for(const mode of ['old-process','unknown','changed-lock','mismatch-record']) {
+    const directory=await registeredProfile(t,44),file=path.join(directory,'instance.lock');
+    const fake={processInfo:async()=>{if(mode==='changed-lock')await fs.writeFile(file,JSON.stringify({pid:45,id:'new-owner'}));if(mode==='mismatch-record')await fs.writeFile(path.join(directory,'instance.json'),JSON.stringify({pid:45,instanceId:'new-owner'}));return mode==='unknown'?null:{pid:44,name:'node.exe',created:new Date(mode==='old-process'?Date.now()-5000:Date.now()+5000).toISOString()};}};
+    await assert.rejects(verifyProfileLock(directory,{recoverStale:true,adapter:fake,isAlive:async()=>true}),/bloccato|cambiato|non coincide/);
+    assert(await fs.readFile(file,'utf8'));assert(!(await fs.readdir(directory)).some(name=>name.includes('.stale-')));
+  }
+});

@@ -1,5 +1,7 @@
 param([Parameter(Mandatory=$true)][string]$InstallDirectory, [Parameter(Mandatory=$true)][string]$StageDirectory, [string]$DataDirectory = (Join-Path $env:APPDATA 'GoogleWorkspaceBackup'))
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
 Add-Type -AssemblyName System.Windows.Forms
 $updateMutex = $null; $appMutex = $null; $ownsUpdate = $false; $ownsApp = $false
 $failed = $false; $applyStarted = $false
@@ -20,7 +22,11 @@ try {
         $code = $LASTEXITCODE
     }
     if ($code -eq 2) { throw 'Operazione in corso: attendi oppure annulla il backup nell app, quindi riprova.' }
-    if ($code -ne 0) { throw ('Chiusura incompleta. ' + (Get-Content -LiteralPath $log -Raw)) }
+    if ($code -ne 0) {
+        $details = Get-Content -LiteralPath $log -Raw
+        try { $report = $details | ConvertFrom-Json; if ($report.error) { $details = [string]$report.error } } catch {}
+        throw ('Chiusura incompleta. ' + $details)
+    }
     $appMutex = [Threading.Mutex]::new($false, 'Local\GoogleWorkspaceBackup')
     try { $ownsApp = $appMutex.WaitOne(3000) } catch [Threading.AbandonedMutexException] { $ownsApp = $true }
     if (-not $ownsApp) { throw 'Un launcher e ancora attivo. Riprova.' }

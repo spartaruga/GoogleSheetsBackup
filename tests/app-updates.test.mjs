@@ -87,3 +87,10 @@ test('startup verifier runs the real server and shuts down only its own read-onl
   assert.equal(await fs.readFile(path.join(profile,'state.json'),'utf8'),state);
   await assert.rejects(fs.access(path.join(profile,'instance.lock')),error=>error.code==='ENOENT');
 });
+
+test('force never substitutes the actual profile path in worker arguments',async()=>{
+  const {workerArguments}=await import('../update-worker.mjs');
+  assert.deepEqual(workerArguments(['--close','root','stage','--force'],'actual-profile'),{mode:'--close',root:'root',stage:'stage',directory:'actual-profile',force:true});
+  assert.equal(workerArguments(['--close','root','stage','explicit-profile','--force'],'default-profile').directory,'explicit-profile');
+  assert.throws(()=>workerArguments(['--close','root','stage','--invalid'],'default-profile'),/non validi/);
+});

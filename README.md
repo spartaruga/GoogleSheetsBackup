@@ -202,7 +202,7 @@ Scarica [Aggiorna-GWB.cmd](https://github.com/spartaruga/GoogleSheetsBackup/raw/
 
 Gli aggiornamenti ZIP riutilizzano runtime, launcher EXE e dipendenze della prima installazione. Il programma verifica hash e manifest, conserva i file precedenti e ripristina automaticamente se la prova di avvio fallisce. Il profilo in `%APPDATA%\GoogleWorkspaceBackup` resta esterno alla sostituzione. **Chiudi vecchie istanze** chiude solo altre istanze verificate del programma; se una è bloccata richiede conferma.
 
-Il canale `packages/stable.json` nel repository distribuisce la versione applicativa, distinta dalle Release EXE. L’installer iniziale resta 3.4.5: la versione in Windows «App installate» può quindi restare 3.4.5 mentre l’app mostra 3.5.0. Modifiche a dipendenze, runtime o launcher compilato richiedono una nuova build completa esplicita.
+Il canale `packages/stable.json` nel repository distribuisce la versione applicativa, distinta dalle Release EXE. L’installer iniziale resta 3.4.5: la versione in Windows «App installate» può quindi restare 3.4.5 mentre l’app mostra 3.5.1. Modifiche a dipendenze, runtime o launcher compilato richiedono una nuova build completa esplicita.
 
 ## Pubblica su GitHub e crea una Release completa (facoltativa)
 

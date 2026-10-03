@@ -743,7 +743,7 @@ async function handleApi(request, response, pathname) {
   if (pathname === "/api/updates" && request.method === "GET") return sendJson(response, 200, await checkUpdates(APP_VERSION));
   if (pathname === "/api/instances/close" && request.method === "POST") {
     const payload=await readJson(request);
-    return sendJson(response,200,await closeAppProcesses({protectPid:process.pid,force:payload.force===true}));
+    return sendJson(response,200,await closeAppProcesses({protectPid:process.pid,force:payload.force===true,profileDirectory:DATA_DIR}));
   }
   if (pathname === "/api/updates/install" && request.method === "POST") {
     if(process.platform!=="win32" || path.basename(BASE_DIR).toLowerCase()!=="app") throw new Error("Per la prima installazione usa Aggiorna-GWB.cmd dal repository ufficiale.");

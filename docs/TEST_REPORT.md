@@ -1,5 +1,13 @@
 # Verifiche
 
+## Hotfix 3.5.1 — 2026-10-03
+
+- L’utente ha eseguito il bootstrap su Windows e fornito uno screenshot con il blocco del profilo. Lo screenshot non contiene PID/identità: non determina se il caso sia PID riutilizzato o istanza non riconosciuta.
+- Corretto il controllo: un processo nato oltre due secondi dopo l’ultima scrittura del lock non può possedere quel lock. Solo questo caso provato archivia il lock e il record corrispondente con suffisso stale-UUID. Record differenti o non leggibili bloccano il recupero. Non termina il processo; conserva stato, credenziali e record. Un lock modificato durante il controllo interrompe il recupero.
+- Aggiunto handshake del record per avvii con percorso relativo: PID, proprietario, sessione, porta di ascolto e instanceId devono coincidere. Uno stato busy verificato rimane bloccante anche se il controllo successivo smette di rispondere.
+- Corretto il percorso del profilo con --force. Errori controllati su stdout JSON e UTF-8 esplicito in PowerShell; il dialogo mostra il messaggio leggibile e il log mantiene codice e dati diagnostici essenziali.
+- Linux Node 24.19.0: 66 test superati, self-test OK, gate sorgente e diff whitespace verificati. Nessuna Action o build Windows avviata. Non è stato possibile riprodurre il processo specifico dell’utente né collaudare nativamente la correzione: serve una nuova esecuzione del bootstrap sul suo PC.
+
 ## Versione applicativa 3.5.0 — 2026-10-03
 
 - Linux, Node 24.19.0: 60 test Node superati, self-test OK, controllo repository e diff whitespace superati. Nessuna chiamata Google autenticata.

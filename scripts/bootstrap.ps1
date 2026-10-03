@@ -1,10 +1,13 @@
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 Add-Type -AssemblyName System.Net.Http
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $stage = Join-Path ([IO.Path]::GetTempPath()) ('gwb-update-' + [Guid]::NewGuid().ToString('N'))
 $repo = 'spartaruga/GoogleSheetsBackup'
+$dataDirectory = Join-Path $env:APPDATA 'GoogleWorkspaceBackup'
 $client = [Net.Http.HttpClient]::new()
 $client.Timeout = [TimeSpan]::FromMinutes(5)
 $client.DefaultRequestHeaders.Add('User-Agent', 'GoogleWorkspaceBackup')
@@ -65,23 +68,27 @@ try {
             [IO.Compression.ZipFileExtensions]::ExtractToFile($runtimeZip.GetEntry('node-v24.20.0-win-x64/node.exe'), $node)
         } finally { $runtimeZip.Dispose() }
     }
-    & $node (Join-Path $stage 'app\update-worker.mjs') --close $root $stage *> (Join-Path $stage 'close.log')
+    & $node (Join-Path $stage 'app\update-worker.mjs') --close $root $stage $dataDirectory *> (Join-Path $stage 'close.log')
     $code = $LASTEXITCODE
     if ($code -eq 3) {
         $answer = [Windows.Forms.MessageBox]::Show('Alcune vecchie istanze verificate non rispondono. Chiuderle forzatamente? Eventuali operazioni non salvate potrebbero andare perse.', 'Chiudi vecchie istanze', 'YesNo', 'Warning')
         if ($answer -ne 'Yes') { throw 'Aggiornamento annullato.' }
-        & $node (Join-Path $stage 'app\update-worker.mjs') --close $root $stage --force *> (Join-Path $stage 'close.log')
+        & $node (Join-Path $stage 'app\update-worker.mjs') --close $root $stage $dataDirectory --force *> (Join-Path $stage 'close.log')
         $code = $LASTEXITCODE
     }
     if ($code -eq 2) { throw 'Operazione in corso: attendi oppure annulla il backup prima di aggiornare.' }
-    if ($code -ne 0) { throw ('Chiusura incompleta. ' + (Get-Content -LiteralPath (Join-Path $stage 'close.log') -Raw)) }
+    if ($code -ne 0) {
+        $details = Get-Content -LiteralPath (Join-Path $stage 'close.log') -Raw
+        try { $report = $details | ConvertFrom-Json; if ($report.error) { $details = [string]$report.error } } catch {}
+        throw ('Chiusura incompleta. ' + $details)
+    }
     if (-not (Test-Path -LiteralPath (Join-Path $root '.gwb-update')) -and (-not (Test-Path -LiteralPath (Join-Path $root 'GoogleWorkspaceBackup.exe')) -or -not (Test-Path -LiteralPath (Join-Path $root 'runtime\node.exe')) -or -not (Test-Path -LiteralPath (Join-Path $root 'app\node_modules')))) {
         $setup = Join-Path $stage 'Setup-base.exe'
         Save-Download "https://github.com/$repo/releases/download/v3.4.5/GoogleWorkspaceBackup-Setup-3.4.5.exe" $setup 'fd2dd574655c283c03610b1a6e46aa0556ed9d99c7ef8ffa79f12a126f998b37'
         $installed = Start-Process -FilePath $setup -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="' + $root + '"')) -Wait -PassThru
         if ($installed.ExitCode -ne 0) { throw ('Installazione iniziale fallita: ' + $installed.ExitCode) }
     }
-    & (Join-Path $stage 'UpdateApp.ps1') -InstallDirectory $root -StageDirectory $stage
+    & (Join-Path $stage 'UpdateApp.ps1') -InstallDirectory $root -StageDirectory $stage -DataDirectory $dataDirectory
     if ($LASTEXITCODE -ne 0) { throw 'Aggiornamento non completato; dettagli nella cartella temporanea.' }
 } catch {
     [Windows.Forms.MessageBox]::Show(($_.Exception.Message + "`r`nDettagli: " + $stage), 'Google Workspace Backup', 'OK', 'Error') | Out-Null

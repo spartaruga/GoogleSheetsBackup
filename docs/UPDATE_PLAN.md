@@ -1,6 +1,6 @@
 # Aggiornamenti applicativi senza Actions
 
-Versione 3.5.0. `Aggiorna-GWB.cmd` e il pulsante **Controlla aggiornamenti** scaricano il pacchetto applicativo dal canale ufficiale `spartaruga/GoogleSheetsBackup`. Le Release EXE rimangono disponibili per la prima installazione e gli aggiornamenti del runtime. Il workflow Windows non ha eventi automatici.
+Versione 3.5.1. `Aggiorna-GWB.cmd` e il pulsante **Controlla aggiornamenti** scaricano il pacchetto applicativo dal canale ufficiale `spartaruga/GoogleSheetsBackup`. Le Release EXE rimangono disponibili per la prima installazione e gli aggiornamenti del runtime. Il workflow Windows non ha eventi automatici.
 
 ## Preparazione e pubblicazione
 
@@ -17,10 +17,10 @@ Non occorre una nuova Release GitHub per ogni modifica applicativa. La pubblicaz
 
 Il bootstrap è un singolo CMD con lo script PowerShell incorporato; non richiede Node globale. Riutilizza l’installazione registrata in Windows. Se manca, scarica Node e il Setup 3.4.5 da URL fissati e controlla i rispettivi SHA-256. Credenziali, token, stato, ID, inventari e backup restano nel profilo esterno.
 
-Prima di sostituire file, verifica il ZIP e cerca tutte le istanze dello stesso proprietario e sessione. Verifica il percorso del server/launcher e il package del programma. Le porte di ascolto appartengono al PID verificato. Un server con lavoro noto in corso blocca la chiusura anche con force. Un server non responsivo viene forzato solo con conferma; identità, creazione e percorso vengono riletti subito prima di terminare il PID. L’istanza corrente e i suoi antenati sono protetti dal pulsante nell’app. Non si termina per nome né si chiude un albero di processi generico.
+Prima di sostituire file, verifica il ZIP e cerca tutte le istanze dello stesso proprietario e sessione. Verifica il percorso del server/launcher e il package del programma. Le porte di ascolto appartengono al PID verificato. Un server con lavoro noto in corso blocca la chiusura anche con force. Per gli avvii con server.mjs relativo, il lock e il record locale vengono confrontati con PID proprietario della porta e handshake instanceId. Un server non responsivo viene forzato solo con conferma; identità, creazione e percorso vengono riletti subito prima di terminare il PID. L’istanza corrente e i suoi antenati sono protetti dal pulsante nell’app. Non si termina per nome né si chiude un albero di processi generico.
 
 Il worker acquisisce il mutex del launcher e il blocco del profilo. Sostituisce app/ tramite rinomine sullo stesso volume, riutilizzando node_modules. Ogni rinomina ha un journal. Avvia il nuovo server in modalità di verifica: solo health/shutdown sono accessibili. Dopo la prova chiude quel server e riavvia il launcher normale. Un fallimento ripristina il codice precedente. `.gwb-previous` conserva la copia immediatamente precedente; eventuali copie più vecchie sono mantenute con un suffisso, senza cancellare aggiunte locali.
 
-Se il PC si spegne a metà aggiornamento, avvia nuovamente `Aggiorna-GWB.cmd`: il worker riprende il ripristino dal journal prima di tentare l’installazione. Non cancellare `.gwb-update` manualmente. Se il journal è invalido l’aggiornamento si ferma e conserva i file per analisi.
+Se il PC si spegne a metà aggiornamento, avvia nuovamente `Aggiorna-GWB.cmd`: il worker riprende il ripristino dal journal prima di tentare l’installazione. Un PID riutilizzato è riconosciuto solo se l’avvio del processo è successivo al timestamp del lock: quel lock e il record corrispondente vengono rinominati con suffisso `.stale-UUID` e conservati, senza terminare il processo o toccare credenziali e stato. Lock attivi o non verificabili restano bloccati e l’errore include PID e nome del processo. Non cancellare `.gwb-update` manualmente. Se il journal è invalido l’aggiornamento si ferma e conserva i file per analisi.
 
 I test automatici della logica, dei guasti e dell’avvio reale sono locali. Gli adattatori CIM, PowerShell e il CMD richiedono una prova nativa su Windows; questa versione non avvia un runner per effettuarla. Le operazioni Google usano fixture nei test, nessun account reale.
