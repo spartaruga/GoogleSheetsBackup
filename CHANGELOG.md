@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.4.4 — 2026-10-03
+## 3.4.5 — 2026-10-03
 
 - Il Setup offre «Chiudi l’app e continua» quando la versione precedente è aperta e inattiva. Richiede la chiusura al server locale, attende Node e launcher e prosegue l’aggiornamento; «Annulla aggiornamento» lascia aperta l’app.
 - Backup e pubblicazioni in corso bloccano la chiusura e l’aggiornamento. Processi non verificabili, blocchi corrotti e chiusure non concluse restano bloccati: nessuna terminazione forzata o ricerca generica di tutti i processi Node.

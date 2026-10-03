@@ -1,6 +1,6 @@
 # Verifiche
 
-## Versione 3.4.4 — 2026-10-03
+## Versione 3.4.5 — 2026-10-03
 
 - Modifica circoscritta al Setup: dialogo di chiusura e helper PowerShell incluso nell’installer. Nessuna modifica alle API Google, al backend o al formato dei dati personali.
 - 43 test Node, self-test, controllo repository e `git diff --check` superati localmente. PowerShell, Inno Setup e finestra dell’installer vengono verificati sul runner Windows.
@@ -8,6 +8,7 @@
 - Il collaudo Windows esercita il pulsante della finestra reale del Setup sull’upgrade dalla Release 3.4.3 con l’app aperta. Una richiesta locale fittizia verifica che chiusura e installazione si fermino durante una scrittura. I casi con PID estraneo e blocco corrotto non autorizzano la chiusura; il controllo di un PID non più esistente conserva il blocco.
 - Il workflow ripete i controlli esistenti su UI, runtime incluso, seconda istanza, credenziali/token/ID e backup conservati nell’upgrade e nella disinstallazione. Gli esiti Windows vanno confermati nel workflow prima della pubblicazione.
 - API Google simulate e profili fittizi. Il pulsante chiude l’app Windows; non interrompe esecuzioni Apps Script remote.
+- La candidata 3.4.4 non è stata distribuita: il [primo collaudo](https://github.com/spartaruga/GoogleSheetsBackup/actions/runs/37110306580) ha superato compilazione, UI web, protezione delle scritture e dei PID, poi non ha trovato i controlli del Setup tramite UI Automation. Il test 3.4.5 usa i controlli Win32 del solo processo installer e gestisce il normale avvio dell’app dopo «Fine»; la pubblicazione resta subordinata al collaudo completo.
 
 ## Versione 3.4.3 — 2026-10-02
 

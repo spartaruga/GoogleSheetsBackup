@@ -40,7 +40,16 @@ function Stop-App($app) {
     Invoke-RestMethod "$($app.Url)/api/shutdown" -Method Post -Headers $headers -ContentType 'application/json' -Body '{}' | Out-Null
     for ($i = 0; $i -lt 30; $i++) {
         $app.Process.Refresh()
-        if ($app.Process.HasExited) { return }
+        # The interactive Setup can launch the app on Finish. Start-App then
+        # reuses that instance, so its own EXE may have already exited.
+        $runtimeAlive = Get-Process -Id $app.Record.pid -ErrorAction SilentlyContinue
+        $launcherAlive = $false
+        try {
+            $runningMutex = [Threading.Mutex]::OpenExisting('Local\GoogleWorkspaceBackup')
+            $launcherAlive = $true
+            $runningMutex.Dispose()
+        } catch [Threading.WaitHandleCannotBeOpenedException] {}
+        if ($app.Process.HasExited -and -not $runtimeAlive -and -not $launcherAlive) { return }
         Start-Sleep -Milliseconds 500
     }
     $app.Process.Refresh()

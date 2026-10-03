@@ -63,8 +63,43 @@ function Assert-UnverifiedProcessProtection([string]$Install, [string]$ProfileDi
 }
 
 function Install-WithCloseButton([string]$Setup, [string]$Install) {
-    Add-Type -AssemblyName UIAutomationClient
-    Add-Type -AssemblyName UIAutomationTypes
+    # Enumerate Win32 controls directly: UI Automation's desktop root can be
+    # empty in the hosted runner's session even while the wizard is running.
+    Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class GwbInstallerWindows {
+    public class Window { public IntPtr Handle; public int Pid; public string Text, Class; public bool Enabled, Visible; }
+    private delegate bool EnumProc(IntPtr hwnd, IntPtr data);
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc callback, IntPtr data);
+    [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr hwnd, EnumProc callback, IntPtr data);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int count);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder text, int count);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+    [DllImport("user32.dll")] private static extern bool IsWindowEnabled(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern IntPtr GetParent(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern int GetDlgCtrlID(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr hwnd, uint message, IntPtr wparam, IntPtr lparam);
+    private static void Add(List<Window> list, IntPtr hwnd) {
+        uint pid; GetWindowThreadProcessId(hwnd, out pid);
+        var text = new StringBuilder(512); GetWindowText(hwnd, text, text.Capacity);
+        var cls = new StringBuilder(128); GetClassName(hwnd, cls, cls.Capacity);
+        list.Add(new Window { Handle=hwnd, Pid=(int)pid, Text=text.ToString(), Class=cls.ToString(), Enabled=IsWindowEnabled(hwnd), Visible=IsWindowVisible(hwnd) });
+    }
+    public static Window[] All() {
+        var list = new List<Window>();
+        EnumWindows((hwnd, data) => { Add(list, hwnd); EnumChildWindows(hwnd, (child, unused) => { Add(list, child); return true; }, IntPtr.Zero); return true; }, IntPtr.Zero);
+        return list.ToArray();
+    }
+    public static bool Click(IntPtr hwnd) {
+        // WM_COMMAND / BN_CLICKED: the same notification sent by a button.
+        return PostMessage(GetParent(hwnd), 0x0111, new IntPtr(GetDlgCtrlID(hwnd) & 0xffff), hwnd);
+    }
+}
+'@
     $process = Start-Process $Setup -ArgumentList ('/SP- /NORESTART /LANG=italian /DIR="' + $Install + '"') -PassThru
     $sawCloseButton = $false
     $lastNames = @()
@@ -80,38 +115,17 @@ function Install-WithCloseButton([string]$Setup, [string]$Install) {
         $all = @(Get-CimInstance Win32_Process)
         $ids = @($process.Id)
         for ($i = 0; $i -lt 3; $i++) { $ids += @($all | Where-Object { $_.ParentProcessId -in $ids } | ForEach-Object { [int]$_.ProcessId }) }
-        $windows = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
-            [System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
-        foreach ($window in $windows) {
-            try {
-                if ($window.Current.ProcessId -notin $ids) { continue }
-                $buttons = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
-                    [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button))
-                $lastNames = @($buttons | ForEach-Object { $_.Current.Name })
-                foreach ($button in $buttons) {
-                    $name = $button.Current.Name.Replace('&', '')
-                    if (-not $button.Current.IsEnabled) { continue }
-                    $isClose = $name -like 'Chiudi*app e continua*'
-                    if (-not $isClose -and $name -notmatch '^(Avanti|Installa|Fine)\b') { continue }
-                    if ($name -match '^Fine\b') {
-                        $checks = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
-                            [System.Windows.Automation.Condition]::TrueCondition)
-                        foreach ($check in $checks) {
-                            if ($check.Current.Name -like '*Avvia Google Workspace Backup*') {
-                                $pattern = $null
-                                if ($check.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$pattern)) {
-                                    if ($pattern.Current.ToggleState -eq [System.Windows.Automation.ToggleState]::On) { $pattern.Toggle() }
-                                } elseif ($check.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$pattern)) {
-                                    if ($pattern.Current.State -band 16) { $pattern.DoDefaultAction() }
-                                }
-                            }
-                        }
-                    }
-                    $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
-                    if ($isClose) { $sawCloseButton = $true }
-                    break
-                }
-            } catch [System.Windows.Automation.ElementNotAvailableException] {}
+        $windows = @([GwbInstallerWindows]::All() | Where-Object { $_.Pid -in $ids })
+        $lastNames = @($windows | Where-Object { $_.Visible -and $_.Text } | ForEach-Object { "$($_.Class): $($_.Text)" })
+        foreach ($button in $windows) {
+            if (-not $button.Enabled -or -not $button.Visible -or $button.Class -notlike '*Button*') { continue }
+            $name = $button.Text.Replace('&', '')
+            $isClose = $name -like 'Chiudi*app e continua*'
+            if (-not $isClose -and $name -notmatch '^(Avanti|Installa|Fine)\b') { continue }
+            if (-not [GwbInstallerWindows]::Click($button.Handle)) { throw "Impossibile premere il pulsante $name." }
+            Write-Host "INSTALLER CLICK: $name"
+            if ($isClose) { $sawCloseButton = $true }
+            break
         }
         Start-Sleep -Milliseconds 300
     }
