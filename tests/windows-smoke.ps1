@@ -1,5 +1,6 @@
 $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Questo test installa/disinstalla il programma: eseguirlo solo nel runner Windows usa e getta di GitHub Actions.' }
+. (Join-Path $PSScriptRoot 'windows-installer.ps1')
 $version = [string](Get-Content package.json -Raw | ConvertFrom-Json).version
 $setup = Join-Path $PWD "release\GoogleWorkspaceBackup-Setup-$version.exe"
 $install = Join-Path $env:RUNNER_TEMP 'GWB install with spaces'
@@ -77,11 +78,12 @@ if (-not $duplicate.WaitForExit(15000) -or $duplicate.ExitCode -ne 0) { throw 'S
 $after = Get-Content (Join-Path $GwbProfileDirectory 'instance.json') -Raw | ConvertFrom-Json
 if ($after.pid -ne $app.Record.pid) { throw 'Sono partite due istanze.' }
 Stop-App $app
+Assert-UnverifiedProcessProtection $install $GwbProfileDirectory
 # Exercise an actual upgrade from the previous public Release on this disposable runner.
 $currentSetup = $setup
 $previousSetup = Join-Path $env:RUNNER_TEMP 'GWB previous Setup.exe'
-Invoke-WebRequest 'https://github.com/spartaruga/GoogleSheetsBackup/releases/download/v3.4.2/GoogleWorkspaceBackup-Setup-3.4.2.exe' -OutFile $previousSetup -UseBasicParsing
-if ((Get-FileHash $previousSetup -Algorithm SHA256).Hash.ToLowerInvariant() -ne '0dae479febc889e620d56e4808b3758ae15848bc1e713bc2c06fc82be2f7bb71') { throw 'Checksum della Release precedente non valido.' }
+Invoke-WebRequest 'https://github.com/spartaruga/GoogleSheetsBackup/releases/download/v3.4.3/GoogleWorkspaceBackup-Setup-3.4.3.exe' -OutFile $previousSetup -UseBasicParsing
+if ((Get-FileHash $previousSetup -Algorithm SHA256).Hash.ToLowerInvariant() -ne '5f54b24b20fedb21c9c6fcfa76fd95b52c474ae77146508bf4ae10749c552a3e') { throw 'Checksum della Release precedente non valido.' }
 $setup = $previousSetup
 Install-App
 # Synthetic schema-v3 profile compatible with the original source version.
@@ -104,10 +106,11 @@ $paths = @($stateFile, $credentialFile, $tokenFile, (Join-Path $backup 'keep.txt
 $before = @($paths | ForEach-Object { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash })
 $oldApp = Start-App
 $oldState = Invoke-RestMethod "$($oldApp.Url)/api/state"
-if ($oldState.appVersion -ne '3.4.2' -or $oldState.projects[0].scriptId -ne $scriptId) { throw 'Il test non ha avviato la Release precedente con il profilo salvato.' }
-Stop-App $oldApp
+if ($oldState.appVersion -ne '3.4.3' -or $oldState.projects[0].scriptId -ne $scriptId) { throw 'Il test non ha avviato la Release precedente con il profilo salvato.' }
+Assert-InstallerBusyProtection $oldApp $currentSetup $install
 $setup = $currentSetup
-Install-App
+Install-WithCloseButton $setup $install
+if (-not $oldApp.Process.WaitForExit(15000)) { throw 'Il pulsante non ha chiuso il launcher precedente.' }
 $app = Start-App
 $state = Invoke-RestMethod "$($app.Url)/api/state"
 if ($state.outputDir -ne $backup -or $state.tokenProtection -ne 'dpapi') { throw 'Profilo precedente non conservato.' }
@@ -118,4 +121,4 @@ if ($uninstaller.ExitCode -ne 0) { throw 'Disinstallazione fallita.' }
 if (Test-Path (Join-Path $install 'GoogleWorkspaceBackup.exe')) { throw 'Il programma non e stato rimosso.' }
 $after = @($paths | ForEach-Object { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash })
 if (($before -join ',') -ne ($after -join ',')) { throw 'Dati utente modificati da installazione/disinstallazione.' }
-Write-Host "WINDOWS SMOKE OK: avvio senza Node globale, seconda istanza, upgrade reale 3.4.2 -> $version e disinstallazione con dati conservati."
+Write-Host "WINDOWS SMOKE OK: avvio senza Node globale, seconda istanza, pulsante di chiusura, upgrade reale 3.4.3 -> $version e disinstallazione con dati conservati."

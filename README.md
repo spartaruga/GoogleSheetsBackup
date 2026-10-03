@@ -140,11 +140,13 @@ Su Windows il token è cifrato con DPAPI per l'utente corrente. Il JSON OAuth e 
 
 ## Aggiornamento e disinstallazione
 
-1. Premi **Controlla aggiornamenti** per aprire la Release ufficiale, poi aspetta il termine dei lavori e premi **Chiudi programma** anche nella vecchia versione.
-2. Installa il nuovo Setup nella stessa cartella.
+1. Premi **Controlla aggiornamenti** per aprire la Release ufficiale e scarica il nuovo Setup.
+2. Installa nella stessa cartella. Se l’app è aperta, premi **Chiudi l’app e continua** nella finestra del Setup: la chiusura usa il comando normale dell’app e attende anche il launcher. Puoi scegliere **Annulla aggiornamento** e lasciare l’app aperta.
 3. Riapri e verifica versione, account, progetti e storico.
 
 Il Setup aggiorna i file applicativi e mantiene i dati nel profilo e i backup. Non copia automaticamente dati da cartelle non standard. Non usare la cartella d'installazione come destinazione backup.
+
+Se un backup o una pubblicazione è in corso, il Setup si ferma: aspetta il termine oppure annulla il backup dall’app e riprova. Un processo che non risponde o un blocco locale non verificabile richiede la chiusura manuale; il Setup non forza processi. Le installazioni silenziose si fermano quando l’app è aperta, senza chiuderla automaticamente. Il comando riguarda l’app Windows, non le esecuzioni Apps Script su Google.
 
 Per disinstallare: **Impostazioni Windows → App → App installate → Google Workspace Backup → Disinstalla**. Il programma e i collegamenti vengono rimossi; profilo e backup restano. Per rimuovere anche i dati, prima salva ciò che ti serve, scollega/revoca Google e rimuovi manualmente le sole cartelle personali indicate sopra. L'app non le cancella durante la disinstallazione.
 
@@ -152,7 +154,7 @@ Per disinstallare: **Impostazioni Windows → App → App installate → Google 
 
 - **Sorgente senza Node:** usa il Setup compilato, oppure segui la build qui sotto. L'installer non richiede Node globale.
 - **Finestra non aperta:** avvia `Avvia_visibile.bat` o `Diagnostica.bat` e leggi i log nella cartella profilo.
-- **Versione precedente attiva:** chiudila dal suo pulsante. Non terminare tutti i processi Node: potrebbero appartenere ad altri programmi.
+- **Versione precedente attiva:** il nuovo Setup offre **Chiudi l’app e continua**, oppure puoi usare **Chiudi programma** nell’app. Non terminare tutti i processi Node: potrebbero appartenere ad altri programmi.
 - **Porta occupata:** il server prova la porta storica 47831 e, se occupata da altro, chiede al sistema una porta libera. Il launcher legge la porta effettiva. Non servono porte in ingresso sul router.
 - **Blocco locale non leggibile dopo un arresto anomalo:** riavvia Windows. Solo dopo aver verificato che GWB non sia in esecuzione, rimuovi `instance.json`, `instance.lock` e l'eventuale `instance.lock.recovery` dal profilo. Non rimuovere `state.json` o token.
 - **`state.json` non valido:** il programma si ferma senza sovrascriverlo. Conservane una copia e ripristina una versione valida.

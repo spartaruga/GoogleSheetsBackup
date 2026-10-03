@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.4.4 — 2026-10-03
+
+- Il Setup offre «Chiudi l’app e continua» quando la versione precedente è aperta e inattiva. Richiede la chiusura al server locale, attende Node e launcher e prosegue l’aggiornamento; «Annulla aggiornamento» lascia aperta l’app.
+- Backup e pubblicazioni in corso bloccano la chiusura e l’aggiornamento. Processi non verificabili, blocchi corrotti e chiusure non concluse restano bloccati: nessuna terminazione forzata o ricerca generica di tutti i processi Node.
+- Il controllo verifica PID, inventario dell’istanza e risposta del server locale senza proxy. Dati, token e backup restano nel profilo esistente. Le installazioni silenziose non chiudono l’app automaticamente; la protezione della disinstallazione è mantenuta.
+- Il collaudo Windows verifica il pulsante nel Setup reale, l’upgrade dalla 3.4.3 lasciata aperta, il blocco durante una scrittura e la conservazione dei dati. Verifica anche PID estranei e blocchi corrotti/obsoleti.
+
 ## 3.4.3 — 2026-10-02
 
 - Eliminata la sesta pagina «Trigger ed esecuzioni» e la raccolta diagnostica separata. Le impostazioni Cloud, l’inventario e il piano trigger sono nelle opzioni del Backup; esecuzioni e trigger restano selezionabili nello stesso ZIP.
