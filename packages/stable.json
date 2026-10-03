@@ -1,10 +1,10 @@
 {
   "format": "gwb-update-channel-v1",
-  "version": "3.5.0",
-  "packageBlob": "f9e3191f7e84651f83410211c73ccde93a3065be",
-  "sha256": "72ebf5bb2023fda217ffe7acf9f97e3f20a85936bce0a4d0fec5b009df94d174",
-  "size": 99773,
-  "sourceCommit": "5b8ca7a50b6655c845a20dac1ec7e2c6a2376d68",
-  "notes": "Aggiornamenti ZIP senza Actions, ripristino automatico e chiusura delle istanze precedenti con conferma per quelle bloccate.",
-  "publishedAt": "2026-10-03T11:33:13.414Z"
+  "version": "3.5.1",
+  "packageBlob": "016590ba17949653b6c463a4ecdbb50ed21d17a1",
+  "sha256": "51fe999f61d6b9282c7436cf5f45db399fb23a9fbea753433ae3c7ddb7455288",
+  "size": 101334,
+  "sourceCommit": "9f0fc6bb1a297b6a8302c24fac9ba1746dc115d1",
+  "notes": "Correzione del blocco del profilo: handshake delle istanze registrate, recupero verificato dei PID riutilizzati e profilo corretto con force.",
+  "publishedAt": "2026-10-03T12:33:37.188Z"
 }
